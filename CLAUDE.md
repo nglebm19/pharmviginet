@@ -97,10 +97,10 @@ pharmviginet/
 | 2–5 — Clean/Dedup/Normalize/Join | clean_faers.py | ✅ Done | master.parquet (52.7M rows) |
 | 6 — ML split | (notebook) | ✅ Done | ml/{train,val,test}.parquet |
 | 7 — Baseline (ROR labels) | models/baseline.py | ✅ Done — circular, see below | baseline_results.json |
-| 8 — Drug normalization | labels/drug_norm.py | 🔄 | external/rxnorm_map.parquet |
+| 8 — Drug normalization | labels/drug_norm.py | ✅ 76.4% of 33.8K names mapped | external/rxnorm_map.parquet |
 | 9 — SIDER pairs | labels/sider.py | ✅ Done | external/sider_pairs.parquet |
-| 10 — SIDER labels | labels/build_labels.py | ⏳ | processed/labels_sider.parquet |
-| 11 — Baseline (SIDER labels) | models/baseline.py --labels sider | ⏳ | baseline_results_sider.json |
+| 10 — SIDER labels | labels/build_labels.py | ✅ 713K pairs, 29% positive | processed/labels_sider.parquet |
+| 11 — Baseline (SIDER labels) | models/baseline.py --labels sider | ✅ | baseline_results_sider.json |
 | — Text (PubMedBERT) | models/text.py | ⏸ 1 epoch on 10K sample, AUC 0.64 | text_best.pt |
 | — Mol / Fusion | models/mol.py, fusion.py | ⏸ | fusion.py empty |
 
@@ -202,7 +202,14 @@ df = df.sort_values("caseversion").groupby("caseid").last()
 ## Baseline to Beat
 | Model | AUC |
 |---|---|
-| ROR / PRR on SIDER labels | TBD — run `models.baseline --labels sider` |
+| ROR on SIDER labels, pooled (test, row-level) | 0.48 |
+| ROR on SIDER labels, pooled (test, unique pairs) | 0.48 |
+| ROR on SIDER labels, **within-PT** (weighted mean) | **0.61** |
+
+Pooled AUC is below chance because SIDER positives are mostly common, non-specific
+events (nausea, headache) that have low ROR for every drug. Compare drugs within the
+same event (within-PT AUC) — this matches published ROR-vs-SIDER results.
+Benchmark metric must be event-stratified, not pooled.
 | ROR_all on ROR labels (circular, ignore) | 0.94 test |
 
 ---
@@ -223,8 +230,8 @@ df = df.sort_values("caseversion").groupby("caseid").last()
 | Audit clean | ✅ |
 | master.parquet built | ✅ |
 | Git repo + backup | ✅ |
-| Independent labels (SIDER) — task A | ⬜ |
-| Statistical baselines rescored on new labels | ⬜ |
+| Independent labels (SIDER) — task A | ✅ |
+| Statistical baselines rescored on new labels | ✅ (pooled metric flawed — see Baseline) |
 | Label-change dates (SrLC) — task B early detection | ⬜ |
 | Cold-start split — task C | ⬜ |
 | Benchmark v0 public (repo + HF dataset + leaderboard) | ⬜ |
