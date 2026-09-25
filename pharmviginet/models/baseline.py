@@ -14,28 +14,44 @@ import argparse
 import numpy as np
 import pandas as pd
 
-from pharmviginet.config import LABELS_SIDER, LOGS, VAL_PARQUET, TEST_PARQUET
+import pyarrow.parquet as pq
+
+from pharmviginet.config import LABELS_SIDER, LOGS, TRAIN_PARQUET, VAL_PARQUET, TEST_PARQUET
+from pharmviginet.models.disproportionality import (
+    bcpnn, compute_prr, ebgm, fit_mgps_prior, pair_counts, prr,
+)
 from pharmviginet.utils.metrics import compute_metrics, print_metrics, save_metrics
 
 COLS = ["label", "ror", "ror_lower_ci", "n_reports", "drugname", "pt", "ror_train", "primaryid"]
 PAIR = ["drugname", "pt"]
 
 
-def compute_prr(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    PRR per (drugname, pt), counting distinct reports (primaryid):
-        PRR = (a / n_drug) / ((n_reac - a) / (N - n_drug))
-    Pass all rows of the split — before label filtering — so counts are complete.
-    """
-    rep = df[["primaryid", "drugname", "pt"]].drop_duplicates()
-    N = rep["primaryid"].nunique()
-    a = rep.groupby(PAIR)["primaryid"].nunique().rename("a").reset_index()
-    n_drug = rep.groupby("drugname")["primaryid"].nunique().rename("n_drug").reset_index()
-    n_reac = rep.groupby("pt")["primaryid"].nunique().rename("n_reac").reset_index()
-    p = a.merge(n_drug, on="drugname").merge(n_reac, on="pt")
-    denom = (p["n_reac"] - p["a"]) / (N - p["n_drug"])
-    p["prr"] = (p["a"] / p["n_drug"]) / denom.replace(0, np.nan)
-    return p[PAIR + ["prr"]]
+def train_counts() -> tuple[pd.DataFrame, tuple]:
+    """Train-period pair counts + fitted MGPS prior (fair: no future data)."""
+    print("Counting train-period reports …")
+    cols = ["primaryid", "drugname", "pt"]
+    df = pq.read_table(TRAIN_PARQUET, columns=cols, read_dictionary=cols).to_pandas()
+    c = pair_counts(df)
+    del df
+    c["drugname"] = c["drugname"].astype(str)
+    c["pt"] = c["pt"].astype(str)
+    c["prr_train"] = prr(c)
+    c["ic"], c["ic025"] = bcpnn(c["a"], c["E"])
+    prior = fit_mgps_prior(c["a"].values, c["E"].values)
+    print(f"  {len(c):,} train pairs; MGPS prior (a1,b1,a2,b2,p) = "
+          + ", ".join(f"{v:.4g}" for v in prior))
+    return c[PAIR + ["a", "E", "prr_train", "ic", "ic025"]], prior
+
+
+def add_train_scores(df: pd.DataFrame, counts: pd.DataFrame, prior: tuple) -> pd.DataFrame:
+    """Join train-period scores; pairs unseen in train get neutral scores."""
+    df = df.merge(counts, on=PAIR, how="left")
+    seen = df["a"].notna()
+    df["ebgm"], df["eb05"] = 1.0, 1.0
+    if seen.any():
+        g, g05 = ebgm(df.loc[seen, "a"].values, df.loc[seen, "E"].values, prior)
+        df.loc[seen, "ebgm"], df.loc[seen, "eb05"] = g, g05
+    return df.fillna({"prr_train": 1.0, "ic": 0.0, "ic025": 0.0})
 
 
 def load_split(path, labels: str = "ror", level: str = "pair") -> pd.DataFrame:
@@ -53,9 +69,12 @@ def load_split(path, labels: str = "ror", level: str = "pair") -> pd.DataFrame:
     return df
 
 
-def evaluate(split_name: str, path, labels: str = "ror", level: str = "pair") -> dict:
+def evaluate(split_name: str, path, labels: str = "ror", level: str = "pair",
+             train: tuple | None = None) -> dict:
     print(f"Loading {split_name} ({labels} labels, {level} level) …")
     df = load_split(path, labels, level)
+    if train is not None:
+        df = add_train_scores(df, *train)
     print(f"  {len(df):,} {level}s, {df['label'].mean():.1%} positive")
 
     y_true = df["label"].values
@@ -79,7 +98,16 @@ def evaluate(split_name: str, path, labels: str = "ror", level: str = "pair") ->
     prr_metrics = compute_metrics(y_true, prr_score, groups=groups)
     print_metrics(f"{split_name}/PRR", prr_metrics)
 
-    return {"ror_all": ror_metrics, "ror_train": ror_train_metrics, "prr": prr_metrics}
+    results = {"ror_all": ror_metrics, "ror_train": ror_train_metrics, "prr": prr_metrics}
+    if train is not None:
+        # train-period methods; log-scale where the statistic is a ratio
+        for name, score in [("prr_train", np.log(df["prr_train"].clip(lower=1e-9))),
+                            ("ic", df["ic"]), ("ic025", df["ic025"]),
+                            ("ebgm", np.log(df["ebgm"])), ("eb05", np.log(df["eb05"]))]:
+            m = compute_metrics(y_true, score.values, threshold=0.0, groups=groups)
+            print_metrics(f"{split_name}/{name.upper()}", m)
+            results[name] = m
+    return results
 
 
 def main() -> None:
@@ -90,11 +118,12 @@ def main() -> None:
                         help="score each unique (drug, pt) pair once, or every report row")
     args = parser.parse_args()
 
+    train = train_counts()
     results = {}
     if args.split in ("val", "both"):
-        results["val"] = evaluate("val", VAL_PARQUET, args.labels, args.level)
+        results["val"] = evaluate("val", VAL_PARQUET, args.labels, args.level, train)
     if args.split in ("test", "both"):
-        results["test"] = evaluate("test", TEST_PARQUET, args.labels, args.level)
+        results["test"] = evaluate("test", TEST_PARQUET, args.labels, args.level, train)
 
     suffix = ("" if args.labels == "ror" else f"_{args.labels}") + ("" if args.level == "pair" else "_row")
     out = LOGS / f"baseline_results{suffix}.json"

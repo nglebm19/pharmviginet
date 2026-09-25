@@ -203,11 +203,23 @@ df = df.sort_values("caseversion").groupby("caseid").last()
 SIDER labels, test split, one score per unique (drug, pt) pair.
 Primary metric = `auc_strat` (AUC within each PT, weighted mean; `utils/metrics.stratified_auc`).
 
+All `_train` methods use train-period counts only (fair); unseen pairs get neutral scores.
+
 | Model | AUC pooled | **AUC_strat** |
 |---|---|---|
-| ROR_train (train-period ROR, fair) | 0.53 | **0.61** |
-| ROR_all (all-period ROR) | 0.48 | 0.61 |
-| PRR (within split, fixed formula) | 0.46 | 0.58 |
+| IC (BCPNN) | 0.52 | **0.615** |
+| EBGM (MGPS) | 0.53 | **0.615** |
+| PRR_train | 0.52 | 0.612 |
+| ROR_train | 0.53 | 0.608 |
+| EB05 | 0.55 | 0.605 |
+| IC025 | 0.55 | 0.602 |
+| ROR_all (uses eval-period data) | 0.48 | 0.606 |
+| PRR (within eval split) | 0.46 | 0.583 |
+
+All classical methods land at 0.60–0.62 — this is the bar for learned models.
+MGPS prior fit (zero-truncated, 4.3M train pairs) is near-degenerate
+(p=0.99 on a gamma with alpha≈3e-5); EBGM still ranks well but check prior before
+reporting EBGM values themselves.
 
 Pooled AUC is below chance because SIDER positives are mostly common, non-specific
 events (nausea, headache) that have low ROR for every drug. Compare drugs within the

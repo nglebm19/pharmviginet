@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pharmviginet.models import baseline
+from pharmviginet.models import baseline, disproportionality
 from pharmviginet.utils.metrics import compute_metrics, stratified_auc
 
 
@@ -38,7 +38,7 @@ def test_compute_prr():
     rows += [(5, "X", "E")] + [(i, "X", "OTHER") for i in range(6, 11)]
     rows += [(1, "D", "E")]  # duplicate row must not double count
     df = pd.DataFrame(rows, columns=["primaryid", "drugname", "pt"])
-    prr = baseline.compute_prr(df).set_index(["drugname", "pt"])["prr"]
+    prr = disproportionality.compute_prr(df).set_index(["drugname", "pt"])["prr"]
     # a=2, n_drug=4, n_reac=3, N=10 → (2/4) / ((3-2)/(10-4)) = 3.0
     assert prr[("D", "E")] == pytest.approx(3.0)
 
