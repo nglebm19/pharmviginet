@@ -46,11 +46,19 @@ Read only when needed: `data/logs/`, `data/processed/`, `pharmviginet/`
 
 
 ## Motivational Intent
-Open-source multi-modal pharmacovigilance signal detection.
-Fuses drug molecular structure (ChemBERTa) + clinical narratives (PubMedBERT)
-to detect adverse drug event signals in FDA FAERS data.
-Goal: beat ROR/PRR baselines, publish bioRxiv preprint, 1K GitHub stars in 90 days.
-Solo builder. Move fast.
+Open-source, non-commercial benchmark for adverse drug event signal detection
+on FDA FAERS data ("FAERS-Bench"). Portfolio project — no revenue goal.
+Provides a clean, deduplicated, time-split FAERS dataset, independent labels
+(SIDER, later FDA label-change dates), and reproducible baselines
+(ROR, PRR, BCPNN/IC, EBGM, LightGBM, ChemBERTa) so methods can be compared fairly.
+Goal: public GitHub repo + leaderboard, write-up/preprint, strong portfolio piece.
+Solo builder. Correctness over speed.
+
+### Licensing constraints (non-commercial)
+- Code: open-source license (TBD, e.g. MIT).
+- SIDER is CC BY-NC-SA and contains MedDRA terms — never commit or redistribute
+  raw SIDER files; ship scripts that rebuild labels locally instead.
+- FAERS data is public domain.
 
 ---
 
@@ -203,15 +211,17 @@ df = df.sort_values("caseversion").groupby("caseid").last()
 
 ---
 
-## 90-Day Targets
-| Milestone | Day | Done? |
-|---|---|---|
-| All quarters collected | 5 | ✅ |
-| Audit clean | 8 | ⬜ |
-| master.parquet built | 15 | ⬜ |
-| ROR baseline published | 20 | ⬜ |
-| Text model beats baseline | 30 | ⬜ |
-| Fusion model trained | 55 | ⬜ |
-| bioRxiv submitted | 60 | ⬜ |
-| 1K GitHub stars | 90 | ⬜ |
-| 5 pharma calls booked | 90 | ⬜ |
+## Milestones
+| Milestone | Done? |
+|---|---|
+| All quarters collected | ✅ |
+| Audit clean | ✅ |
+| master.parquet built | ✅ |
+| Git repo + backup | ✅ |
+| Independent labels (SIDER) — task A | ⬜ |
+| Statistical baselines rescored on new labels | ⬜ |
+| Label-change dates (SrLC) — task B early detection | ⬜ |
+| Cold-start split — task C | ⬜ |
+| Benchmark v0 public (repo + HF dataset + leaderboard) | ⬜ |
+| ML / ChemBERTa baselines | ⬜ |
+| Write-up / preprint | ⬜ |
