@@ -5,6 +5,7 @@ Baseline signal detector — evaluates classical ROR and PRR against labels.
 Usage:
     python -m pharmviginet.models.baseline          # val + test
     python -m pharmviginet.models.baseline --split val
+    python -m pharmviginet.models.baseline --labels sider   # independent SIDER labels
 """
 from __future__ import annotations
 
@@ -13,14 +14,17 @@ import json
 import numpy as np
 import pandas as pd
 
-from pharmviginet.config import LOGS, VAL_PARQUET, TEST_PARQUET
+from pharmviginet.config import LABELS_SIDER, LOGS, VAL_PARQUET, TEST_PARQUET
 from pharmviginet.utils.metrics import compute_metrics, print_metrics, save_metrics
 
 COLS = ["label", "ror", "ror_lower_ci", "n_reports", "drugname", "pt", "ror_train"]
 
 
-def load_split(path) -> pd.DataFrame:
+def load_split(path, labels: str = "ror") -> pd.DataFrame:
     df = pd.read_parquet(path, columns=COLS)
+    if labels == "sider":
+        sider = pd.read_parquet(LABELS_SIDER, columns=["drugname", "pt", "label"])
+        df = df.drop(columns="label").merge(sider, on=["drugname", "pt"], how="inner")
     df = df.dropna(subset=["ror", "label"])
     df["ror"] = pd.to_numeric(df["ror"], errors="coerce")
     df["label"] = df["label"].astype(int)
@@ -43,14 +47,14 @@ def compute_prr(df: pd.DataFrame) -> pd.Series:
     return df.merge(prr_df[["drugname", "pt", "prr"]], on=["drugname", "pt"], how="left")["prr"]
 
 
-def evaluate(split_name: str, path) -> dict:
-    print(f"Loading {split_name} …")
-    df = load_split(path)
+def evaluate(split_name: str, path, labels: str = "ror") -> dict:
+    print(f"Loading {split_name} ({labels} labels) …")
+    df = load_split(path, labels)
     print(f"  {len(df):,} rows, {df['label'].mean():.1%} positive")
 
     y_true = df["label"].values
 
-    # ROR_all (cheating baseline — label derived from this)
+    # ROR_all — circular under ror labels (label derived from it)
     ror_score = np.log1p(df["ror"].clip(lower=0).values)
     ror_metrics = compute_metrics(y_true, ror_score)
     print_metrics(f"{split_name}/ROR_all", ror_metrics)
@@ -74,15 +78,17 @@ def evaluate(split_name: str, path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--split", choices=["val", "test", "both"], default="both")
+    parser.add_argument("--labels", choices=["ror", "sider"], default="ror")
     args = parser.parse_args()
 
     results = {}
     if args.split in ("val", "both"):
-        results["val"] = evaluate("val", VAL_PARQUET)
+        results["val"] = evaluate("val", VAL_PARQUET, args.labels)
     if args.split in ("test", "both"):
-        results["test"] = evaluate("test", TEST_PARQUET)
+        results["test"] = evaluate("test", TEST_PARQUET, args.labels)
 
-    out = LOGS / "baseline_results.json"
+    suffix = "" if args.labels == "ror" else f"_{args.labels}"
+    out = LOGS / f"baseline_results{suffix}.json"
     save_metrics(out, results)
     print(f"\nSaved → {out}")
 

@@ -74,11 +74,12 @@ pharmviginet/
 │   ├── raw/           # SKIP — 160 zips
 │   ├── extracted/     # SKIP — 91 quarters 2004Q1–2026Q1
 │   ├── processed/     # target — parquet outputs
-│   ├── external/      # DrugBank, SIDER
+│   ├── external/      # SIDER download, RxNav caches, rxnorm_map, sider_pairs (never commit)
 │   └── logs/          # READ — audit_report.json, schema_map.json
 ├── pharmviginet/      # READ — source package
 │   ├── config.py
 │   ├── data/{faers,clean,smiles}.py
+│   ├── labels/{drug_norm,sider,build_labels}.py   # independent labels
 │   ├── models/{baseline,text,mol,fusion}.py
 │   ├── train/{train,evaluate}.py
 │   └── utils/{logging,metrics}.py
@@ -91,17 +92,17 @@ pharmviginet/
 ## Pipeline Stages
 | Stage | Script | Status | Output |
 |---|---|---|---|
-| 0 — Collect | collect_faers.py | ✅ Done | 91 quarters incl 2026Q1 |
-| 1 — Audit | audit_faers.py | 🔄 Next | data/logs/audit_report.json |
-| 2 — Clean | clean_faers.py | ⏳ | data/processed/*.parquet |
-| 3 — Dedup | clean_faers.py | ⏳ | cases_deduped.parquet |
-| 4 — Normalize | clean_faers.py | ⏳ | drug_smiles_map.parquet |
-| 5 — Join | clean_faers.py | ⏳ | master.parquet |
-| 6 — ML split | build_dataset.py | ⏳ | ml/{train,val,test}.parquet |
-| 7 — Baseline | models/baseline.py | ⏳ | ROR/PRR scores |
-| 8 — Text | models/text.py | ⏳ | PubMedBERT fine-tuned |
-| 9 — Mol | models/mol.py | ⏳ | ChemBERTa fine-tuned |
-| 10 — Fusion | models/fusion.py | ⏳ | PharmVigiNet v1 |
+| 0 — Collect | collect_faers.py | ✅ Done | 89 quarters 2004Q1–2026Q1 |
+| 1 — Audit | audit_faers.py | ✅ Done | data/logs/audit_report.json |
+| 2–5 — Clean/Dedup/Normalize/Join | clean_faers.py | ✅ Done | master.parquet (52.7M rows) |
+| 6 — ML split | (notebook) | ✅ Done | ml/{train,val,test}.parquet |
+| 7 — Baseline (ROR labels) | models/baseline.py | ✅ Done — circular, see below | baseline_results.json |
+| 8 — Drug normalization | labels/drug_norm.py | 🔄 | external/rxnorm_map.parquet |
+| 9 — SIDER pairs | labels/sider.py | ✅ Done | external/sider_pairs.parquet |
+| 10 — SIDER labels | labels/build_labels.py | ⏳ | processed/labels_sider.parquet |
+| 11 — Baseline (SIDER labels) | models/baseline.py --labels sider | ⏳ | baseline_results_sider.json |
+| — Text (PubMedBERT) | models/text.py | ⏸ 1 epoch on 10K sample, AUC 0.64 | text_best.pt |
+| — Mol / Fusion | models/mol.py, fusion.py | ⏸ | fusion.py empty |
 
 ---
 
@@ -120,16 +121,22 @@ pd.read_csv(path, sep="$", encoding="latin1", low_memory=False)
 ### 7 files per quarter
 - `DEMO` — one row per case, primary join key
 - `DRUG` — one row per drug per case; filter `role_cod == "PS"` only
-- `REAC` — MedDRA reactions = your labels
-- `NARR` — free-text = NLP input (sparse before 2015, missing in old quarters = normal)
+- `REAC` — MedDRA reactions (event side of each pair)
 - `OUTC` — patient outcomes
 - `RPSR` — report source
+- `THER` — therapy dates
 - `INDI` — drug indication
 
-### NARR coverage by era
-- Before 2013: <5% — skip for NLP
-- 2013–2017: 10–30% — use with caution
-- 2018–present: 50–65% — primary NLP range
+### No narratives in public FAERS
+- Public quarterly files have **no NARR / free-text narrative file** (audit: NARR ≥10% never reached).
+- `text_input` in master.parquet is a template (`"<DRUG> caused <PT>"`), not real text.
+- Text models therefore have no real narrative input — don't plan around NARR.
+
+### Labels
+- Old label `ROR ≥ 2.0 AND lower_CI > 1.0` is **circular** — ROR baselines score against their own formula (AUC 0.94). Kept only for comparison.
+- Benchmark label = SIDER 4.1 (see `pharmviginet/labels/`): positive if SIDER lists (ingredient, pt);
+  negative if drug and pt both known to SIDER but pair unlisted (closed-world — noisy); else unlabeled.
+- Drug names normalized to RxNorm ingredients via RxNav (`approximateTerm` → `related?tty=IN`), max 15 req/s.
 
 ---
 
@@ -142,8 +149,8 @@ NARR  → PubMedBERT → [text_emb: 768] ─┘
 - Text: `microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext`
 - Mol: `seyonec/ChemBERTa-zinc-base-v2`
 - Optimizer: AdamW lr=2e-5, weight_decay=0.01
-- Loss: BCE with class weighting pos:neg ≈ 1:15
-- Label: `ROR ≥ 2.0 AND lower_CI > 1.0`
+- Loss: BCE (current code pos_weight=15 — wrong for the 59% positive ROR labels; revisit per label set)
+- Label: see Labels above — not the ROR rule
 
 ---
 
@@ -185,7 +192,7 @@ df = df.sort_values("caseversion").groupby("caseid").last()
 - **Phantom column** — trailing `$` creates empty col: `df = df.loc[:, ~df.columns.str.startswith('Unnamed')]`
 - **PubChem rate limit** — 5 req/sec max: `time.sleep(0.2)` between calls
 - **SMILES missing ~15%** — biologics/vaccines have no SMILES, use learned `[UNK-MOL]` embedding
-- **Class imbalance** — true signals are 5–8% of pairs, always use weighted loss
+- **Class balance** — 59% positive under old ROR labels; recheck under SIDER labels before choosing loss weights
 - **role_cod values** — PS=primary suspect, SS=secondary, C=concomitant, I=interacting
 - **caseversion** — keep only `max(caseversion)` per `caseid`, reports get updated over time
 - **2026Q1 exists** — collector grabbed an early 2026 quarter, treat as 2025 holdout
@@ -195,10 +202,8 @@ df = df.sort_values("caseversion").groupby("caseid").last()
 ## Baseline to Beat
 | Model | AUC |
 |---|---|
-| ROR classical | ~0.71 |
-| PRR classical | ~0.69 |
-| Text-only PubMedBERT | TBD |
-| **PharmVigiNet multi-modal** | **target: text+8pts** |
+| ROR / PRR on SIDER labels | TBD — run `models.baseline --labels sider` |
+| ROR_all on ROR labels (circular, ignore) | 0.94 test |
 
 ---
 

@@ -23,3 +23,9 @@ MAX_EPOCHS   = 10
 POS_WEIGHT   = 15.0
 TEXT_MAX_LEN = 128
 MOL_MAX_LEN  = 128
+
+EXTERNAL       = DATA / "external"
+RXNORM_MAP     = EXTERNAL / "rxnorm_map.parquet"
+SIDER_DIR      = EXTERNAL / "sider"
+SIDER_PAIRS    = EXTERNAL / "sider_pairs.parquet"
+LABELS_SIDER   = PROCESSED / "labels_sider.parquet"
