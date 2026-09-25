@@ -55,7 +55,7 @@ Goal: public GitHub repo + leaderboard, write-up/preprint, strong portfolio piec
 Solo builder. Correctness over speed.
 
 ### Licensing constraints (non-commercial)
-- Code: open-source license (TBD, e.g. MIT).
+- Code: MIT (see LICENSE). Covers code only, not data or third-party labels.
 - SIDER is CC BY-NC-SA and contains MedDRA terms — never commit or redistribute
   raw SIDER files; ship scripts that rebuild labels locally instead.
 - FAERS data is public domain.
