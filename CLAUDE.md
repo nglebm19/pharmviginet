@@ -200,17 +200,19 @@ df = df.sort_values("caseversion").groupby("caseid").last()
 ---
 
 ## Baseline to Beat
-| Model | AUC |
-|---|---|
-| ROR on SIDER labels, pooled (test, row-level) | 0.48 |
-| ROR on SIDER labels, pooled (test, unique pairs) | 0.48 |
-| ROR on SIDER labels, **within-PT** (weighted mean) | **0.61** |
+SIDER labels, test split, one score per unique (drug, pt) pair.
+Primary metric = `auc_strat` (AUC within each PT, weighted mean; `utils/metrics.stratified_auc`).
+
+| Model | AUC pooled | **AUC_strat** |
+|---|---|---|
+| ROR_train (train-period ROR, fair) | 0.53 | **0.61** |
+| ROR_all (all-period ROR) | 0.48 | 0.61 |
+| PRR (within split, fixed formula) | 0.46 | 0.58 |
 
 Pooled AUC is below chance because SIDER positives are mostly common, non-specific
 events (nausea, headache) that have low ROR for every drug. Compare drugs within the
 same event (within-PT AUC) — this matches published ROR-vs-SIDER results.
 Benchmark metric must be event-stratified, not pooled.
-| ROR_all on ROR labels (circular, ignore) | 0.94 test |
 
 ---
 
