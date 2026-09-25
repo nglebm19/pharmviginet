@@ -1,0 +1,672 @@
+╭─── Claude Code v2.1.152 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                Welcome back Andrew!                │ started                 │
+│                                                    │ Run /init to create a … │
+│                       ▐▛███▜▌                      │ ─────────────────────── │
+│                      ▝▜█████▛▘                     │ What's new              │
+│                        ▘▘ ▝▝                       │ `/code-review --fix` n… │
+│       Sonnet 4.6 · Claude Pro ·                    │ Skills and slash comma… │
+│       nguyenld.work@gmail.com's Organization       │ Added `/reload-skills`… │
+│        ~/Git/hub/theblackswan/pharmviginet         │ /release-notes for more │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+
+❯ review my codebase                                                            
+
+⏺ Skill(code-review)
+  ⎿  Successfully loaded skill
+
+⏺ Let me start by exploring the codebase structure since this isn't a git
+  repository.
+
+  Searched for 1 pattern, listed 1 directory (ctrl+o to expand)
+
+⏺ Let me read all the key source files in parallel.
+
+  Read 3 files (ctrl+o to expand)
+
+⏺ Let me read the remaining source files.
+
+  Read 10 files (ctrl+o to expand)
+
+⏺ All other package files are empty stubs. Let me check the remaining files.
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ The codebase is primarily collect_faers.py — the other package files are empty
+   stubs. Let me run the multi-angle review now.
+
+⏺ 3 agents finished (ctrl+o to expand)
+   ├ Angle A — line-by-line correctness scan · 2 tool uses · 9.5k tokens
+   │ ⎿  Done
+   ├ Angles B/C/D — removed-behavior, cross-file, reuse · 2 tool uses · 18.1k tokens
+   │ ⎿  Done
+   └ Angles E/F/G — simplification, efficiency, altitude · 1 tool use · 8.3k tokens
+     ⎿  Done
+
+⏺ Now I'll verify and rank the candidates that survived all three angles.
+
+  Verify pass:
+
+  - Line 370 (era precedence) — CONFIRMED. Python and binds tighter than or.
+  quarter.endswith("Q2") or quarter.endswith("Q3") execute unconditionally — any
+   year's Q2/Q3 is classified "aers". Contradicts correct logic at line 466.
+  - Line 265 (KeyboardInterrupt escapes cleanup) — CONFIRMED. KeyboardInterrupt
+  is BaseException, not Exception. Line 274 except Exception does not catch it.
+  tmp.unlink() is never called; .tmp file is orphaned.
+  - Line 221 (re-download when Content-Length absent) — CONFIRMED. remote_size
+  is None when server omits Content-Length. target.exists() and None and ...
+  short-circuits to False, bypassing the skip; complete file is re-downloaded.
+  - Line 499/500 (estimate_storage zero-counts fallback URLs) — CONFIRMED.
+  Fallback URLs have size_mb=None, _get_remote_size returns None. remote = 0.
+  The file contributes 0 to remain_bytes despite being un-downloaded.
+  - Line 205 (resume skips "skipped_existing") — CONFIRMED. prior_ok only
+  includes status=="ok". A file recorded as "skipped_existing" from a prior run
+  is not skipped by resume check at 218; falls through to size comparison at
+  221, and re-downloads if remote_size is None.
+  - Line 523 (redundant discover_urls HTTP call) — CONFIRMED. print_final_box
+  unconditionally calls discover_urls(), making a live HTTP scrape or fallback
+  list traversal. In --all mode this is the second call; if FDA is down, the
+  otherwise-successful run crashes here.
+  - Line 493 (80+ sequential HEAD requests in estimate_storage) — CONFIRMED. One
+   _get_remote_size per URL, sequential, 60s timeout each; for 85 files up to 85
+   minutes blocking before any output.
+  - Line 355/376-384 (_count_rows in validate_all) — CONFIRMED. Every table file
+   is opened and streamed line-by-line; pd.read_csv was just done 2 lines
+  earlier on the same file for column sampling. Double I/O on multi-GB files,
+  7×80 times.
+  - Line 164 (IndexError on empty list) — PLAUSIBLE. In practice prevented by
+  the hardcoded fallback, but no length guard before out[0]/out[-1].
+  - Line 462 (status_dashboard int() guard) — REFUTED: lines 464–465 already
+  check .isdigit() before calling int(). No crash possible.
+  - Line 129 (mutable posted_date/size_mb) — PLAUSIBLE. Correct only if the HTML
+   always emits date/size nodes before the corresponding href. Any structural
+  change silently misattributes metadata.
+
+  ---
+  [
+    {
+      "file": "collect_faers.py",
+      "line": 370,
+      "summary": "Operator-precedence bug misclassifies every Q2 and Q3 quarter 
+  from any year as era='aers' instead of 'faers'.",
+      "failure_scenario": "Python 'and' binds tighter than 'or', so the 
+  expression parses as: (year<2012) or (year==2012 and q.endswith('Q1')) or 
+  q.endswith('Q2') or q.endswith('Q3'). For quarter='2020Q2', year=2020: the 
+  first two clauses are False but q.endswith('Q2') is True, so era='aers'. All 
+  Q2 and Q3 quarters from 2013 onward are mislabeled in the validation report. 
+  The correct version at line 466 uses qnum<=3 and is unaffected."
+    },
+    {
+      "file": "collect_faers.py",
+      "line": 265,
+      "summary": "Raising KeyboardInterrupt (BaseException) inside the download 
+  loop bypasses the 'except Exception' cleanup, leaving orphaned .tmp 
+  partial-download files on disk.",
+      "failure_scenario": "User sets _STOP=True via SIGINT mid-chunk. Line 265 
+  raises KeyboardInterrupt. Line 274 'except Exception' does not catch 
+  BaseException subclasses, so tmp.unlink() is never called. Every interrupted 
+  download leaves a .tmp file that will never be automatically cleaned. On a 
+  subsequent run, these stale .tmp files are not detected (the existence check 
+  at line 221 is on the target path, not the .tmp path), so they silently 
+  consume disk space."
+    },
+    {
+      "file": "collect_faers.py",
+      "line": 221,
+      "summary": "Existing complete files are unconditionally re-downloaded when
+   the server omits the Content-Length header.",
+      "failure_scenario": "When the FDA server does not return Content-Length, 
+  _get_remote_size returns None. Line 221: 'target.exists() and remote_size and 
+  ...' short-circuits to False because remote_size is None. The 
+  file-exists/size-match skip is bypassed; download proceeds for a file that is 
+  already complete. On every run, all files whose server lacks Content-Length 
+  will be fully re-downloaded."
+    },
+    {
+      "file": "collect_faers.py",
+      "line": 499,
+      "summary": "estimate_storage silently reports zero remaining bytes for 
+  fallback-list URLs when both the HEAD request and the scraped size_mb are 
+  unavailable.",
+      "failure_scenario": "Fallback URLs have size_mb=None (line 158-159). If 
+  _get_remote_size also returns None (network failure), remote = None or 
+  int((None or 0)*1024*1024) = 0. The else branch executes 'remain_bytes += 0'. 
+  With 85 fallback entries, the tool prints '0.00 GB remaining' and '0.00 hours'
+   while dozens of multi-hundred-MB files are still pending — the operator has 
+  no indication of actual storage/bandwidth needed."
+    },
+    {
+      "file": "collect_faers.py",
+      "line": 205,
+      "summary": "The --resume prior_ok set excludes 'skipped_existing' entries,
+   so previously-skipped quarters are not short-circuited at line 218 and can be
+   re-downloaded if Content-Length is missing.",
+      "failure_scenario": "A first run records some quarters as 
+  'skipped_existing' (files already present). On a second run with --resume, 
+  prior_ok contains only status=='ok' entries. For skipped quarters, the check 
+  at line 218 fails; execution falls to line 221 where remote_size is evaluated.
+   If the server omits Content-Length (remote_size=None), line 221 also fails 
+  and the download proceeds — re-downloading files the user explicitly expected 
+  --resume to skip."
+    },
+    {
+      "file": "collect_faers.py",
+      "line": 523,
+      "summary": "print_final_box unconditionally calls discover_urls(), making 
+  a redundant live HTTP request after an otherwise-complete --all pipeline 
+  run.",
+      "failure_scenario": "In --all mode (line 579-585), discover_urls() is 
+  called at line 564 and the result used for the entire pipeline. 
+  print_final_box then fires a second HTTP GET to the FDA source page solely to 
+  count URLs. If the FDA site is unreachable during this call (common during 
+  off-hours), the function raises an exception and the summary box is never 
+  printed, giving the appearance of a failed run after all work succeeded."
+    },
+    {
+      "file": "collect_faers.py",
+      "line": 493,
+      "summary": "estimate_storage makes one sequential blocking HEAD request 
+  per URL with a 60-second timeout, taking up to 85 minutes for 85 files on a 
+  slow/rate-limited connection.",
+      "failure_scenario": "All 85 _get_remote_size calls are sequential with 
+  REQUEST_TIMEOUT=60. If the FDA server rate-limits or is slow, each can take up
+   to 60 s before returning None. On a degraded connection, the function blocks 
+  for ~85 minutes before printing any estimate. Since this is called at the 
+  start of --all mode, the pipeline appears frozen before any download begins."
+    },
+    {
+      "file": "collect_faers.py",
+      "line": 376,
+      "summary": "_count_rows re-reads every table file in full just to count 
+  lines in validate_all, immediately after pd.read_csv already opened the same 
+  file.",
+      "failure_scenario": "For each of 7 table files per quarter (80+ quarters),
+   validate_all calls pd.read_csv(nrows=10) at line 380 then _count_rows at line
+   383, which reopens and streams the entire file. For DEMO and DRUG files with 
+  millions of rows, this is tens of GB of redundant I/O. On a laptop or NFS 
+  mount, validate_all can take hours instead of seconds. The count could be 
+  estimated from the pandas read or obtained via a binary newline scan without 
+  streaming text."
+    },
+    {
+      "file": "collect_faers.py",
+      "line": 164,
+      "summary": "Unconditional out[0] and out[-1] access will IndexError if 
+  discover_urls produces an empty list.",
+      "failure_scenario": "If scraping fails and all FALLBACK_FILENAMES entries 
+  fail _parse_file_meta (e.g., due to a regex change or empty list), dedup is 
+  empty, out=[], and out[0]['year'] raises IndexError. No length guard exists. 
+  In practice blocked by the hardcoded fallback, but any future refactor that 
+  clears the fallback or tightens the regex crashes the entire script at startup
+   with an unhelpful traceback."
+    },
+    {
+      "file": "collect_faers.py",
+      "line": 129,
+      "summary": "posted_date and size_mb are accumulated mutable state that can
+   be misattributed to the wrong file if the FDA page HTML order diverges from 
+  expected.",
+      "failure_scenario": "posted_date and size_mb are initialized once and 
+  updated as soup.descendants iterates. If the FDA page lists a date or size 
+  node after the corresponding href (or reorders entries), the value from a 
+  previous file bleeds into the next. In the worst case, all files after a 
+  restructured section inherit a stale posted_date or size_mb from an unrelated 
+  earlier link, silently corrupting the metadata stored in download_log.json."
+    }
+  ]
+
+  ---
+  Summary: The codebase has one active file (collect_faers.py) — all other
+  package files are empty stubs. Ten findings survive verification:
+
+  ┌─────┬──────┬──────────┬──────────────────────────────────────────────────┐
+  │  #  │ Line │ Severity │                     Finding                      │
+  ├─────┼──────┼──────────┼──────────────────────────────────────────────────┤
+  │ 1   │ 370  │ Critical │ Operator-precedence bug mislabels every Q2/Q3    │
+  │     │      │          │ quarter from any year as "aers"                  │
+  ├─────┼──────┼──────────┼──────────────────────────────────────────────────┤
+  │ 2   │ 265  │ High     │ KeyboardInterrupt escapes except Exception,      │
+  │     │      │          │ leaving orphaned .tmp files                      │
+  ├─────┼──────┼──────────┼──────────────────────────────────────────────────┤
+  │     │      │          │ Files re-downloaded when server omits            │
+  │ 3   │ 221  │ High     │ Content-Length (skip guard requires non-None     │
+  │     │      │          │ size)                                            │
+  ├─────┼──────┼──────────┼──────────────────────────────────────────────────┤
+  │ 4   │ 499  │ Medium   │ estimate_storage reports 0 GB remaining when     │
+  │     │      │          │ size is unknown (silent undercount)              │
+  ├─────┼──────┼──────────┼──────────────────────────────────────────────────┤
+  │     │      │          │ --resume excludes "skipped_existing" entries     │
+  │ 5   │ 205  │ Medium   │ from prior_ok, combined with finding #3 causes   │
+  │     │      │          │ re-downloads                                     │
+  ├─────┼──────┼──────────┼──────────────────────────────────────────────────┤
+  │     │      │          │ print_final_box fires a redundant HTTP call to   │
+  │ 6   │ 523  │ Medium   │ FDA page; crashes end of --all run if site is    │
+  │     │      │          │ unreachable                                      │
+  ├─────┼──────┼──────────┼──────────────────────────────────────────────────┤
+  │ 7   │ 493  │ Medium   │ estimate_storage makes 85 sequential HEAD        │
+  │     │      │          │ requests (up to 85 min blocking)                 │
+  ├─────┼──────┼──────────┼──────────────────────────────────────────────────┤
+  │ 8   │ 376  │ Low      │ validate_all reads every table file twice        │
+  │     │      │          │ (pandas + _count_rows), redundant multi-GB I/O   │
+  ├─────┼──────┼──────────┼──────────────────────────────────────────────────┤
+  │ 9   │ 164  │ Low      │ out[0]/out[-1] unguarded; IndexError if list is  │
+  │     │      │          │ ever empty                                       │
+  ├─────┼──────┼──────────┼──────────────────────────────────────────────────┤
+  │ 10  │ 129  │ Low      │ posted_date/size_mb mutable state can leak       │
+  │     │      │          │ between adjacent entries during HTML scrape      │
+  └─────┴──────┴──────────┴──────────────────────────────────────────────────┘
+
+✻ Cooked for 6m 37s
+
+※ recap: Reviewed the FAERS data collector. Ten findings were surfaced, led by a critical operator-precedence bug on line 370 that mislabels every Q2/Q3 quarter as the wrong era. Ready to apply fixes when you return. (disable recaps in /config)
+
+❯ I have FDA FAERS/AERS data downloaded and extracted across 65 quarters        
+  spanning 2004 Q1 to 2025 Q4. I need you to build a complete audit and         
+  validation script.                                                            
+                                                                                
+  ## My data structure                                                          
+  data/                                                                         
+  ├── extracted/                                                                
+  │   ├── 2025Q4/                                                               
+  │   │   └── ASCII/                                                            
+  │   │       ├── DEMO25Q4.txt                                                  
+  │   │       ├── DRUG25Q4.txt                                                  
+  │   │       ├── REAC25Q4.txt                                                  
+  │   │       ├── NARR25Q4.txt                                                  
+  │   │       ├── OUTC25Q4.txt                                                  
+  │   │       ├── RPSR25Q4.txt                                                  
+  │   │       └── INDI25Q4.txt                                                  
+  │   ├── 2004Q1/           ← legacy AERS era, different column names           
+  │   │   └── ASCII/                                                            
+  │   │       └── *.txt                                                         
+  │   └── ... (65 quarters total)                                               
+  └── logs/                                                                     
+                                                                                
+  ## Critical facts you must know before writing any code                       
+                                                                                
+  ### Two eras — different schemas                                              
+  ERA 1 — Legacy AERS (2004 Q1 to 2012 Q3):                                     
+    - Primary key column is called "isr" NOT "primaryid"                        
+    - Case ID column is called "case" NOT "caseid"                              
+    - Some files may be missing entirely (NARR was rarely filled)               
+    - File separator is still "$", encoding still latin-1                       
+                                                                                
+  ERA 2 — Modern FAERS (2012 Q4 to present):                                    
+    - Primary key: "primaryid"                                                  
+    - Case ID: "caseid"                                                         
+    - All 7 files expected                                                      
+    - NARR coverage improves significantly from 2015 onwards                    
+                                                                                
+  ### The 7 expected files per quarter                                          
+  DEMO - one row per case (demographics)                                        
+  DRUG - one row per drug per case                                              
+  REAC - one row per reaction per case                                          
+  NARR - free text narratives (NLP input — may be sparse or missing)            
+  OUTC - patient outcomes                                                       
+  RPSR - report source                                                          
+  INDI - drug indication                                                        
+                                                                                
+  ### How to read these files                                                   
+  pd.read_csv(filepath, sep="$", encoding="latin1", low_memory=False)           
+  Watch out for: extra "$" at end of lines creating phantom columns             
+  Watch out for: some files have a header row, some older ones don't            
+  Watch out for: mixed quote characters in narrative text                       
+                                                                                
+  ### Quarter folder naming                                                     
+  Modern era: 2024Q4, 2024Q3, 2024Q2, 2024Q1                                    
+  Legacy era: 2012Q3, 2011Q4, 2004Q1 etc.                                       
+  Detect era by: year < 2012, OR (year == 2012 AND quarter <= 3)                
+                                                                                
+  ## What to build — audit_faers.py                                             
+                                                                                
+  ### Step 1 — Discover all quarters                                            
+  Scan data/extracted/ for all quarter folders.                                 
+  For each folder detect: year, quarter number, era (aers/faers).               
+  Sort chronologically. Print count found.                                      
+                                                                                
+  ### Step 2 — File presence check                                              
+  For each quarter check which of the 7 files exist.                            
+  A file "exists" only if it is present AND size > 0 bytes.                     
+  Build a presence matrix: quarter × file_type → True/False.                    
+  Flag any quarter missing DEMO, DRUG, or REAC as CRITICAL (these are           
+  required for any analysis).                                                   
+  Flag any quarter missing NARR as WARNING (expected for older quarters).       
+                                                                                
+  ### Step 3 — Readability check                                                
+  For each file that exists, attempt to read the first 10 rows with pandas.     
+  Catch and log any exception — do not crash the whole audit.                   
+  For each successful read, record:                                             
+    - column names found                                                        
+    - row count estimate (use file line count for speed, not full pd.read_csv)  
+    - whether primary key column exists (primaryid or isr)                      
+    - whether it has a phantom extra column from trailing "$"                   
+                                                                                
+  ### Step 4 — Schema comparison                                                
+  Compare column names found in each file against the expected modern schema.   
+  Flag any column that is renamed between AERS and FAERS eras.                  
+  Build a mapping table of all name differences found across all quarters.      
+  Known differences to check for:                                               
+    DEMO: isr→primaryid, case→caseid, gndr_cod→sex, age→age_cod                 
+    DRUG: isr→primaryid, drug_seq stays same, drugname stays same               
+    REAC: isr→primaryid, pt stays same                                          
+    NARR: isr→primaryid, text→narr_text (verify actual names)                   
+                                                                                
+  ### Step 5 — Row count analysis                                               
+  For each quarter, count rows in DEMO, DRUG, REAC, NARR.                       
+  Flag as SUSPICIOUS if:                                                        
+    - DEMO rows < 1000 (too small for a full quarter)                           
+    - DRUG rows < DEMO rows (every case should have at least one drug)          
+    - REAC rows < DEMO rows (every case should have at least one reaction)      
+    - NARR rows > DEMO rows (impossible — more narratives than cases)           
+    - NARR rows / DEMO rows < 0.05 for quarters after 2015 (very low coverage)  
+                                                                                
+  ### Step 6 — NARR coverage analysis                                           
+  NARR (free-text narrative) is your NLP input — its coverage is critical.      
+  For each quarter calculate: narr_coverage = narr_rows / demo_rows             
+  Group by year and print average coverage per year.                            
+  Flag the exact quarter where NARR coverage crosses 10%, 25%, 50%.             
+  This tells you which years are actually useful for NLP training.              
+                                                                                
+  ### Step 7 — Generate audit report                                            
+  Save to data/logs/audit_report.json:                                          
+  {                                                                             
+    "audit_timestamp": "...",                                                   
+    "total_quarters": 65,                                                       
+    "era_breakdown": {"aers": 35, "faers": 30},                                 
+    "file_presence": { "2024Q4": {"DEMO": true, "NARR": true, ...}, ... },      
+    "row_counts": { "2024Q4": {"demo": 250000, "drug": 380000, ...}, ... },     
+    "narr_coverage": { "2024Q4": 0.62, "2004Q1": 0.02, ... },                   
+    "schema_differences": [...],                                                
+    "critical_issues": [...],                                                   
+    "warnings": [...],                                                          
+    "quarters_safe_for_nlp": [...],                                             
+    "quarters_safe_for_ml": [...]                                               
+  }                                                                             
+                                                                                
+  ### Step 8 — Print terminal dashboard                                         
+  Use rich library to print a table with one row per quarter:                   
+  Quarter | Era | DEMO | DRUG | REAC | NARR | OUTC | NARR% | Status             
+                                                                                
+  Color coding:                                                                 
+    Green  = all files present, no issues                                       
+    Yellow = minor issues (missing NARR, low coverage)                          
+    Red    = critical issues (missing DEMO/DRUG/REAC or unreadable)             
+                                                                                
+  Print summary box at the end:                                                 
+    Total quarters audited: 65                                                  
+    Fully healthy: XX                                                           
+    Warnings only: XX                                                           
+    Critical issues: XX                                                         
+    Total cases (sum of DEMO rows): ~15,000,000                                 
+    Quarters safe for NLP training: XX (those with NARR% > 10%)                 
+    Quarters safe for ML (any): XX                                              
+                                                                                
+  ## Performance requirements                                                   
+  Reading 65 quarters × 7 files is slow if done naively.                        
+  Use file line count (wc -l equivalent) for row estimates — do NOT             
+  read entire files into memory during audit.                                   
+  Only read first 10 rows per file to check schema and readability.             
+  Full audit must complete in under 3 minutes on a normal laptop.               
+  Show a progress bar (tqdm) while scanning.                                    
+                                                                                
+  ## CLI                                                                        
+  python audit_faers.py                    # run full audit                     
+  python audit_faers.py --quick            # file presence only, no row counts  
+  python audit_faers.py --quarter 2024Q4   # audit single quarter in detail     
+  python audit_faers.py --show-schema      # print schema diff table only       
+  python audit_faers.py --narr-only        # NARR coverage analysis only        
+                                                                                
+  ## Output files                                                               
+  data/logs/audit_report.json     ← full machine-readable report                
+  data/logs/audit_summary.txt     ← human readable summary                      
+  data/logs/schema_map.json       ← column name mapping AERS→FAERS              
+                                                                                
+  ## After writing the script, run it immediately and show me:                  
+  1. The terminal dashboard output                                              
+  2. How many quarters have critical issues                                     
+  3. The NARR coverage by year (this determines my NLP training range)          
+  4. Any schema differences found between AERS and FAERS eras                   
+  5. Your recommendation on which year range to use for NLP vs full ML training 
+
+⏺ Let me first inspect the actual data structure before writing the script.
+
+  Listed 1 directory (ctrl+o to expand)
+
+⏺ Bash(ls /Users/ledinhnguyen/Git/hub/theblackswan/pharmviginet/data/extracted/2
+      016Q1/ 2>/dev/null || ls
+      /Users/ledinhnguyen/Git/hub/theblackswan/pharmviginet/data/ext…)
+  ⎿  drwxr-xr-x@    -  ascii
+     .rw-r--r--@ 239k  FAQs.pdf
+     .rw-r--r--@ 102k  Readme.pdf
+
+  Read 1 file, listed 3 directories (ctrl+o to expand)
+
+⏺ Bash(# Check total quarters and whether any have NARR
+      for q in /Users/ledinhnguyen/Git/hub/theblackswan/pharmviginet/data/extrac
+      ted/*/ascii/; do…)
+  ⎿  NARR search done
+
+⏺ Bash(# Sample filenames across a few different eras
+      echo "=== 2004Q1 ==="; ls /Users/ledinhnguyen/Git/hub/theblackswan/pharmvi
+      ginet/data/extracted/2004Q1/ascii/*.{tx…)
+  ⎿  === 2004Q1 ===
+     (eval):2: no matches found: /Users/ledinhnguyen/Git/hub/theblackswan/p
+     harmviginet/data/extracted/2004Q1/ascii/*.txt
+     … +22 lines (ctrl+o to expand)
+
+  Read 1 file, listed 1 directory (ctrl+o to expand)
+⏺ Bash(# Count quarters with actual data files
+      total=0; for q in
+      /Users/ledinhnguyen/Git/hub/theblackswan/pharmviginet/data/extracted/*/;
+      do…)
+  ⎿  Total valid quarters: 89
+     0
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ Bash(.venv/bin/python -c "import rich, tqdm, pandas; print('OK')" 2>&1)
+  ⎿  OK
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Now I have everything I need. Writing the audit script — I'll handle the real
+  data structure (no NARR files, ascii/ subdirectory, .TXT vs .txt extensions,
+  case differences, 89 quarters).
+
+⏺ Write(audit_faers.py)
+  ⎿  Wrote 720 lines to audit_faers.py
+       2 """usr/bin/env python3
+       3 audit_faers.py — Complete FAERS/AERS data audit and validation
+       5 Usage:
+       6     python audit_faers.py                    # full audit
+       7     python audit_faers.py --quick            # file presence onl
+       8     python audit_faers.py --quarter 2024Q4   # audit single quar
+         ter in detail
+          onlyython audit_faers.py --show-schema      # schema diff table
+      10     python audit_faers.py --narr-only        # NARR coverage ana
+         lysis only
+     … +796 lines (ctrl+o to expand)
+
+⏺ Now run it with a quick pass first to check everything works, then full:
+
+⏺ Bash(.venv/bin/python audit_faers.py --quick 2>&1)
+  ⎿  Discovered 89 quarters  (2004Q1 → 2026Q1)  AERS=35 FAERS=54
+     Step 1 — File presence check...
+     Presence:   0%|                                                    | 0
+     … +137 lines (ctrl+o to expand)
+
+⏺ Good — finds 89 quarters, 1 critical (2018Q1 missing DEMO). Now the full audit
+   with row counts:
+
+⏺ Bash(time .venv/bin/python audit_faers.py 2>&1)
+  ⎿  Discovered 89 quarters  (2004Q1 → 2026Q1)  AERS=35 FAERS=54
+     Step 1 — File presence check...
+     Presence:   0%|                                                    | 0
+     … +273 lines (ctrl+o to expand)
+  ⎿  (timeout 5m)
+
+⏺ Excellent — completed in 18 seconds. Let me verify the single-quarter detail
+  mode and check the 2018Q1 critical issue:
+
+⏺ Bash(.venv/bin/python audit_faers.py --quarter 2018Q1 2>&1)
+  ⎿  ────────────────────────── Detail: 2018Q1  era=FAERS ─────────────────
+     ──────────
+                                     Files in 2018Q1
+     … +44 lines (ctrl+o to expand)
+
+  Listed 1 directory (ctrl+o to expand)
+
+⏺ The critical issue is clear: DEMO18Q1 is named DEMO18Q1_new.txt — a
+  non-standard suffix the script misses. Let me fix the file finder to handle
+  suffix variants:
+
+⏺ Update(audit_faers.py)
+  ⎿  Added 4 lines, removed 3 lines
+      80  
+      81  def find_table_file(qdir: Path, table: str, year: int, q: int) 
+          -> Path | None:
+      82      """
+      83 -    Find {TABLE}{YY}Q{N}.{txt|TXT} regardless of case.         
+      83 +    Find {TABLE}{YY}Q{N}[optional_suffix].{txt|TXT} regardless 
+         +of case.                                                       
+      84 +    Handles non-standard filenames like DEMO18Q1_new.txt via pr
+         +efix match.                                                    
+      85      AERS uses uppercase .TXT, FAERS uses lowercase .txt.
+      86      """
+      87      adir = _ascii_dir(qdir)
+      88      yy   = str(year)[2:]
+      88 -    stem_target = f"{table}{yy}Q{q}".upper()                   
+      89 +    prefix = f"{table}{yy}Q{q}".upper()                        
+      90      for p in adir.iterdir():
+      90 -        if p.is_file() and p.stem.upper() == stem_target and p.
+         -suffix.lower() == ".txt":                                      
+      91 +        if p.is_file() and p.stem.upper().startswith(prefix) an
+         +d p.suffix.lower() == ".txt":                                  
+      92              return p
+      93      return None
+      94  
+
+⏺ Bash(.venv/bin/python audit_faers.py --quarter 2018Q1 2>&1)
+  ⎿  ────────────────────────── Detail: 2018Q1  era=FAERS ─────────────────
+     ──────────
+                                     Files in 2018Q1
+     … +53 lines (ctrl+o to expand)
+
+⏺ 2018Q1 now shows 412,702 DEMO rows — it was just the _new suffix. Let me
+  re-run the full audit to update all reports:
+
+⏺ Bash(time .venv/bin/python audit_faers.py 2>&1 | tail -40)
+  ⎿  │ DRUG  │ —           │ prod_ai       │ added_in_faers   │
+     │ DRUG  │ —           │ ï»¿primaryid  │ added_in_faers   │
+     │ DRUG  │ isr         │ primaryid     │ renamed          │
+     … +39 lines (ctrl+o to expand)
+  ⎿  (timeout 2m)
+
+⏺ All critical issues resolved. Here are the complete results:
+
+  ---
+  Audit Results
+
+  1. Terminal Dashboard
+
+  89 quarters (2004Q1 → 2026Q1) — all present with
+  DEMO/DRUG/REAC/INDI/OUTC/RPSR/THER. The dashboard shows individual row counts
+  for every table per quarter. One real data issue was uncovered: DEMO18Q1 was
+  saved as DEMO18Q1_new.txt (non-standard suffix) — the script now finds it via
+  prefix matching.
+
+  2. Critical Issues
+
+  0 critical issues after fix. The original apparent critical issue (2018Q1
+  missing DEMO) was a filename anomaly — the file exists as DEMO18Q1_new.txt
+  instead of DEMO18Q1.txt. The fix handles any _suffix variants.
+
+  3. NARR Coverage by Year
+
+  0% across all 89 quarters — NARR files do not exist in this dataset. This is
+  the single most important finding:
+
+  ▎ Public FAERS quarterly ASCII downloads do not include the NARR (narrative 
+  ▎ text) table. The FDA distributes these files separately. To get narrative 
+  ▎ text for NLP you need one of:
+  ▎ - openFDA API (/drug/event.json — includes serious_text, consumer_complaint)
+  ▎  — free, rate-limited
+  ▎ - FOIA request to FDA for the full FAERS data with NARR
+  ▎ - FAERS CDER Direct (requires data use agreement)
+
+  4. Schema Differences (AERS → FAERS)
+
+  Table: DEMO
+  Renamed: isr→primaryid, case→caseid
+  Removed from FAERS: i_f_cod, foll_seq, image, death_dt, confid
+  Added in FAERS: caseversion, i_f_code, init_fda_dt, age_grp, auth_num,
+  lit_ref,
+    occr_country
+  ────────────────────────────────────────
+  Table: DRUG
+  Renamed: isr→primaryid
+  Removed from FAERS: —
+  Added in FAERS: caseid, prod_ai, cum_dose_*, dose_amt/unit/form/freq, lot_nbr
+  ────────────────────────────────────────
+  Table: REAC
+  Renamed: isr→primaryid
+  Removed from FAERS: —
+  Added in FAERS: caseid, drug_rec_act
+  ────────────────────────────────────────
+  Table: INDI
+  Renamed: isr→primaryid, drug_seq→indi_drug_seq
+  Removed from FAERS: —
+  Added in FAERS: caseid
+  ────────────────────────────────────────
+  Table: OUTC
+  Renamed: isr→primaryid
+  Removed from FAERS: —
+  Added in FAERS: caseid, outc_code
+  ────────────────────────────────────────
+  Table: RPSR
+  Renamed: isr→primaryid
+  Removed from FAERS: —
+  Added in FAERS: caseid
+  ────────────────────────────────────────
+  Table: THER
+  Renamed: isr→primaryid, drug_seq→dsg_drug_seq
+  Removed from FAERS: —
+  Added in FAERS: caseid
+
+  Note: gndr_cod → sex is a within-FAERS rename (happens around 2013), not
+  visible at the era boundary. Also flagged: ï»¿primaryid in DRUG — a UTF-8 BOM
+  artifact in some files; when joining on primaryid from those files you'll need
+   to strip it.
+
+  5. Recommendations
+
+  ┌──────────────────────┬─────────────────┬───────────────────────────────┐
+  │       Use case       │      Range      │              Why              │
+  ├──────────────────────┼─────────────────┼───────────────────────────────┤
+  │ Full ML training     │ All 89 quarters │ All have DEMO/DRUG/REAC/INDI  │
+  │ (drug-reaction       │  (2004–2026Q1)  │ intact, no critical gaps      │
+  │ signals, outcomes)   │                 │                               │
+  ├──────────────────────┼─────────────────┼───────────────────────────────┤
+  │ FAERS-only ML        │                 │ primaryid/caseid keys,        │
+  │ (consistent schema,  │ 2012Q4 → 2026Q1 │ lowercase columns; still need │
+  │ lower preprocessing) │  (54 quarters)  │  to handle gndr_cod/sex split │
+  │                      │                 │  around 2013                  │
+  ├──────────────────────┼─────────────────┼───────────────────────────────┤
+  │ NLP on narrative     │ Not possible    │ Acquire NARR separately via   │
+  │ text                 │ from this       │ openFDA API or FOIA           │
+  │                      │ dataset         │                               │
+  ├──────────────────────┼─────────────────┼───────────────────────────────┤
+  │                      │                 │ 365K–500K cases/quarter,      │
+  │ Recency-focused      │ 2016Q1 → 2026Q1 │ stable modern schema with     │
+  │ training             │  (41 quarters)  │ sex, age_grp,                 │
+  │                      │                 │ reporter_country              │
+  └──────────────────────┴─────────────────┴───────────────────────────────┘
+
+✻ Baked for 10m 47s
+
+❯ /reload-plugins                                                               
+  ⎿  Reloaded: 0 plugins · 0 skills · 6 agents · 0 hooks · 0 plugin MCP servers · 0 plugin LSP servers
+
+❯ /reload-plugins                                                               
+  ⎿  Reloaded: 0 plugins · 0 skills · 6 agents · 0 hooks · 0 plugin MCP servers · 0 plugin LSP servers

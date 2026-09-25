@@ -1,0 +1,9 @@
+requests
+beautifulsoup4
+pandas
+tqdm
+rich
+torch
+transformers==4.40.0
+pyarrow
+scikit-learn
