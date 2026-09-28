@@ -17,9 +17,10 @@ An open, non-commercial benchmark for adverse drug event signal detection on FDA
 
 ## What's in the benchmark
 
-- **Data:** FAERS / legacy AERS quarterly files, 2004Q1–2026Q1 (89 quarters).
-  Primary-suspect drugs only (`role_cod == "PS"`), deduplicated to the latest
-  `caseversion` per `caseid`. 52.7M rows in `master.parquet`.
+- **Data:** FAERS / legacy AERS quarterly files, 2004Q1–2026Q1 (89 quarters
+  collected). Primary-suspect drugs only (`role_cod == "PS"`), deduplicated to the
+  latest `caseversion` per `caseid`. 52.7M rows in `master.parquet`, currently
+  covering 2012 onward only (see Known limitations).
 - **Time split:** train ≤ 2022, val = 2023, test ≥ 2024 (2026Q1 is treated as
   part of the holdout). No random splits — they leak future reports.
 - **Unit of evaluation:** one (drug, MedDRA PT) pair with ≥ 3 reports.
@@ -38,8 +39,8 @@ RxNorm ingredients via the NLM RxNav API (76.4% of 33.8K FAERS drug names mapped
 Result: 713K labeled pairs, 29% positive. Negatives rely on a closed-world
 assumption and are therefore somewhat noisy.
 
-The older rule `ROR ≥ 2.0 AND lower_CI > 1.0` is circular (ROR scores against
-its own formula, AUC 0.94) and is kept only for comparison.
+The older rule `ROR ≥ 2.0 AND lower_CI > 1.0` is circular (ROR is scored against
+labels derived from ROR) and is kept only for comparison.
 
 ## Metric
 
@@ -61,15 +62,20 @@ SIDER labels, test split, one score per unique (drug, PT) pair.
 | IC (BCPNN) | 0.52 | **0.615** |
 | EBGM (MGPS) | 0.53 | **0.615** |
 | PRR_train | 0.52 | 0.612 |
-| ROR_train | 0.53 | 0.608 |
-| EB05 | 0.55 | 0.605 |
-| IC025 | 0.55 | 0.602 |
-| ROR_all (uses eval-period data) | 0.48 | 0.606 |
-| PRR (within eval split) | 0.46 | 0.583 |
 
 All classical methods land at 0.60–0.62 — the bar for learned models.
-Note: the MGPS prior fit is near-degenerate; EBGM still ranks well, but its
-absolute values should be checked before being reported.
+Full leaderboard: [MVP.md](MVP.md).
+
+## Known limitations
+
+- **2004–2011 missing:** legacy AERS rows are lost during deduplication, so the
+  current training data covers 2012–2022 only.
+- **Split not scripted:** the train/val/test files were built in a notebook.
+- **Label noise:** SIDER negatives rely on a closed-world assumption.
+- **EBGM prior:** the MGPS prior fit is near-degenerate; EBGM still ranks well,
+  but its absolute values should not be reported until the fit is fixed.
+- **No narratives:** public FAERS has no case text, so text models only see
+  templated input.
 
 ## Reproduce
 
@@ -90,7 +96,7 @@ python audit_faers.py
 python clean_faers.py --all
 
 # 5. Time split → data/processed/ml/{train,val,test}.parquet
-#    TODO: currently done in a notebook; a script is planned.
+#    TODO: currently done in a notebook; a script is planned (see MVP.md).
 #    Rule: train = year <= 2022, val = year == 2023, test = year >= 2024
 
 # 6. Map FAERS drug names to RxNorm ingredients → data/external/rxnorm_map.parquet
@@ -112,39 +118,12 @@ pytest tests/
 External APIs are rate-limited in code: RxNav ≤ 15 req/s, PubChem ≤ 5 req/s.
 RxNav lookups are cached and resumable.
 
-## Repo layout
+## Project docs
 
-```
-collect_faers.py        # stage 0 — download + extract quarters
-audit_faers.py          # stage 1 — file / schema audit
-clean_faers.py          # stages 2–5 — clean, dedup, normalize, join
-pharmviginet/
-├── config.py           # paths and hyperparameters
-├── data/               # FAERS loading, cleaning, SMILES lookup
-├── labels/             # RxNorm normalization, SIDER pairs, label building
-├── models/             # baselines (ROR/PRR/IC/EBGM), text, mol, fusion
-├── train/              # training + evaluation loops
-└── utils/              # logging, metrics (stratified AUC)
-scripts/                # server setup, training runner
-tests/
-data/                   # gitignored — raw, extracted, processed, external, logs
-```
-
-## Roadmap
-
-- [x] Collect all quarters (2004Q1–2026Q1)
-- [x] Audit + clean + deduplicate → `master.parquet`
-- [x] Independent labels from SIDER 4.1 (task A)
-- [x] Classical baselines: ROR, PRR, IC/IC025, EBGM/EB05
-- [ ] Split script (replace notebook)
-- [ ] FDA label-change dates (SrLC) — early-detection task (task B)
-- [ ] Cold-start split — unseen drugs (task C)
-- [ ] ML baselines: LightGBM, ChemBERTa, fusion
-- [ ] Public release: Hugging Face dataset + leaderboard
-- [ ] Write-up / preprint
-
-Public FAERS quarterly files contain no case narratives, so text models only
-see templated input (`"<DRUG> caused <PT>"`).
+- [PRODUCT.md](PRODUCT.md) — purpose, users, benchmark tasks, scope, non-goals
+- [MVP.md](MVP.md) — v0 definition, status, full leaderboard, blockers, roadmap
+- [ARCHITECTURE.md](ARCHITECTURE.md) — data flow, stages, module map, scoring
+- [DECISIONS.md](DECISIONS.md) — design decisions and open questions
 
 ## Licensing and data
 

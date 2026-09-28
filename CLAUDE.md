@@ -1,4 +1,18 @@
-# CLAUDE.md — PharmVigiNet
+# CLAUDE.md — PharmVigiNet (FAERS-Bench)
+
+Agent operating manual. Project facts live in the files below; don't repeat them here.
+
+## Docs map
+- `PRODUCT.md` — purpose, users, benchmark tasks, scope, non-goals, licensing
+- `MVP.md` — v0 definition, verified status, leaderboard, blockers, next-work queue
+- `DECISIONS.md` — project decisions (`FB-D1`, …) and open questions
+- `ARCHITECTURE.md` — data flow, stages, module map, labels, scoring, metric
+- `README.md` — public overview and reproduce steps
+
+Verify any status or number against files, `data/logs/*.json` or commits before
+writing it into a doc. The docs have drifted before.
+
+---
 
 ## RIPER-5 Protocol
 
@@ -35,74 +49,12 @@ Operate in exactly one mode at a time. Declare mode at the start of every respon
 ## Do Not Read — Skip These (save tokens)
 ```
 data/raw/          # 160 zips, ~3GB — never read
-data/extracted/    # 91 quarter folders, ~18GB — never read
+data/extracted/    # quarter folders, ~18GB — never read
 __pycache__/       # bytecode — never read
 .venv/             # packages — never read
 notebooks/         # skip unless explicitly asked
 ```
 Read only when needed: `data/logs/`, `data/processed/`, `pharmviginet/`
-
----
-
-
-## Motivational Intent
-Open-source, non-commercial benchmark for adverse drug event signal detection
-on FDA FAERS data ("FAERS-Bench"). Portfolio project — no revenue goal.
-Provides a clean, deduplicated, time-split FAERS dataset, independent labels
-(SIDER, later FDA label-change dates), and reproducible baselines
-(ROR, PRR, BCPNN/IC, EBGM, LightGBM, ChemBERTa) so methods can be compared fairly.
-Goal: public GitHub repo + leaderboard, write-up/preprint, strong portfolio piece.
-Solo builder. Correctness over speed.
-
-### Licensing constraints (non-commercial)
-- Code: MIT (see LICENSE). Covers code only, not data or third-party labels.
-- SIDER is CC BY-NC-SA and contains MedDRA terms — never commit or redistribute
-  raw SIDER files; ship scripts that rebuild labels locally instead.
-- FAERS data is public domain.
-
----
-
-## Actual Folder Structure
-```
-pharmviginet/
-├── CLAUDE.md / AGENTS.md
-├── collect_faers.py   # stage 0 ✅
-├── audit_faers.py     # stage 1
-├── stage1.txt         # stage 1 notes
-├── pyproject.toml / requirements.txt / README.md / LICENSE
-├── data/
-│   ├── raw/           # SKIP — 160 zips
-│   ├── extracted/     # SKIP — 91 quarters 2004Q1–2026Q1
-│   ├── processed/     # target — parquet outputs
-│   ├── external/      # SIDER download, RxNav caches, rxnorm_map, sider_pairs (never commit)
-│   └── logs/          # READ — audit_report.json, schema_map.json
-├── pharmviginet/      # READ — source package
-│   ├── config.py
-│   ├── data/{faers,clean,smiles}.py
-│   ├── labels/{drug_norm,sider,build_labels}.py   # independent labels
-│   ├── models/{baseline,text,mol,fusion}.py
-│   ├── train/{train,evaluate}.py
-│   └── utils/{logging,metrics}.py
-├── scripts/ / notebooks/ / tests/
-```
-**Data flow:** raw zips → extracted txt → processed parquet → master.parquet → ml/train|val|test.parquet → model
-
----
-
-## Pipeline Stages
-| Stage | Script | Status | Output |
-|---|---|---|---|
-| 0 — Collect | collect_faers.py | ✅ Done | 89 quarters 2004Q1–2026Q1 |
-| 1 — Audit | audit_faers.py | ✅ Done | data/logs/audit_report.json |
-| 2–5 — Clean/Dedup/Normalize/Join | clean_faers.py | ✅ Done | master.parquet (52.7M rows) |
-| 6 — ML split | (notebook) | ✅ Done | ml/{train,val,test}.parquet |
-| 7 — Baseline (ROR labels) | models/baseline.py | ✅ Done — circular, see below | baseline_results.json |
-| 8 — Drug normalization | labels/drug_norm.py | ✅ 76.4% of 33.8K names mapped | external/rxnorm_map.parquet |
-| 9 — SIDER pairs | labels/sider.py | ✅ Done | external/sider_pairs.parquet |
-| 10 — SIDER labels | labels/build_labels.py | ✅ 713K pairs, 29% positive | processed/labels_sider.parquet |
-| 11 — Baseline (SIDER labels) | models/baseline.py --labels sider | ✅ | baseline_results_sider.json |
-| — Text (PubMedBERT) | models/text.py | ⏸ 1 epoch on 10K sample, AUC 0.64 | text_best.pt |
-| — Mol / Fusion | models/mol.py, fusion.py | ⏸ | fusion.py empty |
 
 ---
 
@@ -128,29 +80,14 @@ pd.read_csv(path, sep="$", encoding="latin1", low_memory=False)
 - `INDI` — drug indication
 
 ### No narratives in public FAERS
-- Public quarterly files have **no NARR / free-text narrative file** (audit: NARR ≥10% never reached).
-- `text_input` in master.parquet is a template (`"<DRUG> caused <PT>"`), not real text.
-- Text models therefore have no real narrative input — don't plan around NARR.
+- Public quarterly files have **no NARR / free-text narrative file**.
+- `text_input` in `master.parquet` is a template (`"<DRUG> caused <PT>"`), not real text.
+- Don't plan around NARR.
 
 ### Labels
-- Old label `ROR ≥ 2.0 AND lower_CI > 1.0` is **circular** — ROR baselines score against their own formula (AUC 0.94). Kept only for comparison.
-- Benchmark label = SIDER 4.1 (see `pharmviginet/labels/`): positive if SIDER lists (ingredient, pt);
-  negative if drug and pt both known to SIDER but pair unlisted (closed-world — noisy); else unlabeled.
-- Drug names normalized to RxNorm ingredients via RxNav (`approximateTerm` → `related?tty=IN`), max 15 req/s.
-
----
-
-## Model Architecture
-```
-SMILES → ChemBERTa → [mol_emb: 384]  ─┐
-                                        ├→ concat [1152] → MLP → signal_score
-NARR  → PubMedBERT → [text_emb: 768] ─┘
-```
-- Text: `microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext`
-- Mol: `seyonec/ChemBERTa-zinc-base-v2`
-- Optimizer: AdamW lr=2e-5, weight_decay=0.01
-- Loss: BCE (current code pos_weight=15 — wrong for the 59% positive ROR labels; revisit per label set)
-- Label: see Labels above — not the ROR rule
+- Benchmark label = SIDER 4.1 (`FB-D2`). Rules: `ARCHITECTURE.md`.
+- The `label` column in `master.parquet` / `ml/*.parquet` is the **old circular ROR
+  rule**, kept only for comparison. Don't train or score against it.
 
 ---
 
@@ -184,47 +121,47 @@ df = df.sort_values("caseversion").groupby("caseid").last()
 ### Never do
 - Read raw `.txt` directly into model training — always via processed parquet
 - Skip deduplication — ~20% of FAERS rows are duplicates
-- Commit `data/raw/` or `data/extracted/` to git
+- Commit anything under `data/` (raw, extracted, processed, external, logs)
+- Commit or redistribute SIDER files or labels derived from them
+- Report pooled AUC as the headline metric — use `auc_strat` (`FB-D7`)
 
 ---
 
 ## Gotchas & Tribal Knowledge
 - **Phantom column** — trailing `$` creates empty col: `df = df.loc[:, ~df.columns.str.startswith('Unnamed')]`
-- **PubChem rate limit** — 5 req/sec max: `time.sleep(0.2)` between calls
+- **Rate limits** — PubChem ≤ 5 req/s (`time.sleep(0.2)`); RxNav ≤ 15 req/s (enforced in `RxNormClient`)
 - **SMILES missing ~15%** — biologics/vaccines have no SMILES, use learned `[UNK-MOL]` embedding
-- **Class balance** — 59% positive under old ROR labels; recheck under SIDER labels before choosing loss weights
+- **Class balance** — 59% positive under old ROR labels, 29% under SIDER; `POS_WEIGHT=15` in `config.py` fits neither
 - **role_cod values** — PS=primary suspect, SS=secondary, C=concomitant, I=interacting
 - **caseversion** — keep only `max(caseversion)` per `caseid`, reports get updated over time
-- **2026Q1 exists** — collector grabbed an early 2026 quarter, treat as 2025 holdout
+- **2026Q1 exists** — collector grabbed an early 2026 quarter, treat as part of the test holdout
+- **F1 in metrics output is meaningless** — fixed threshold on log scores; ignore it
+- **Drug mapping errors** — RxNav fuzzy matching sometimes picks the wrong ingredient
+  (e.g. SIDER `fenofibric` → fenofibrate); unmapped FAERS names are mostly consumer products
+- **Memory** — loading `train.parquet` for pair counts peaks at ~3.8 GB RAM; a full baseline run takes ~95 s
+- **`.venv` is minimal** — torch and transformers are **not** installed; add them only when a model needs them. Rebuild:
+  `uv venv .venv --python 3.11 && uv pip install --python .venv/bin/python pandas pyarrow requests pytest tqdm scikit-learn scipy`
+- **`git push` can hang** — the macOS keychain helper can block on a hidden prompt. Workaround:
+  `GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push`,
+  or have the user run `gh auth setup-git` once
 
 ---
 
-## Baseline to Beat
-SIDER labels, test split, one score per unique (drug, pt) pair.
-Primary metric = `auc_strat` (AUC within each PT, weighted mean; `utils/metrics.stratified_auc`).
+## Useful commands
+```bash
+.venv/bin/python -m pytest -q tests                                  # 12 tests
+.venv/bin/python -m pharmviginet.models.baseline --labels sider      # leaderboard → data/logs/baseline_results_sider.json
+.venv/bin/python -m pharmviginet.labels.build_labels                 # rebuild labels_sider.parquet
+.venv/bin/python -m pharmviginet.labels.drug_norm                    # RxNav mapping; resumable, ~2.5 h cold
+```
 
-All `_train` methods use train-period counts only (fair); unseen pairs get neutral scores.
-
-| Model | AUC pooled | **AUC_strat** |
-|---|---|---|
-| IC (BCPNN) | 0.52 | **0.615** |
-| EBGM (MGPS) | 0.53 | **0.615** |
-| PRR_train | 0.52 | 0.612 |
-| ROR_train | 0.53 | 0.608 |
-| EB05 | 0.55 | 0.605 |
-| IC025 | 0.55 | 0.602 |
-| ROR_all (uses eval-period data) | 0.48 | 0.606 |
-| PRR (within eval split) | 0.46 | 0.583 |
-
-All classical methods land at 0.60–0.62 — this is the bar for learned models.
-MGPS prior fit (zero-truncated, 4.3M train pairs) is near-degenerate
-(p=0.99 on a gamma with alpha≈3e-5); EBGM still ranks well but check prior before
-reporting EBGM values themselves.
-
-Pooled AUC is below chance because SIDER positives are mostly common, non-specific
-events (nausea, headache) that have low ROR for every drug. Compare drugs within the
-same event (within-PT AUC) — this matches published ROR-vs-SIDER results.
-Benchmark metric must be event-stratified, not pooled.
+## Suggested skills
+- `grill-me` / `grill-with-docs` — stress-test a plan before EXECUTE
+- `tdd` — split script and LightGBM feature code (tests in `tests/`)
+- `diagnose` — ROR-label mismatch, missing 2004–2011 rows
+- `superpowers:verification-before-completion` — before claiming any leaderboard number
+- `explore-codebase` / `review-changes` — code-review-graph MCP is configured for this repo
+- `to-issues` — turn the `MVP.md` queue into GitHub issues, if wanted
 
 ---
 
@@ -234,20 +171,3 @@ Benchmark metric must be event-stratified, not pooled.
 - PubMedBERT: arxiv.org/abs/2007.15779
 - ChemBERTa: arxiv.org/abs/2010.09885
 - OpenFDA API: open.fda.gov/apis/drug/event/
-
----
-
-## Milestones
-| Milestone | Done? |
-|---|---|
-| All quarters collected | ✅ |
-| Audit clean | ✅ |
-| master.parquet built | ✅ |
-| Git repo + backup | ✅ |
-| Independent labels (SIDER) — task A | ✅ |
-| Statistical baselines rescored on new labels | ✅ (pooled metric flawed — see Baseline) |
-| Label-change dates (SrLC) — task B early detection | ⬜ |
-| Cold-start split — task C | ⬜ |
-| Benchmark v0 public (repo + HF dataset + leaderboard) | ⬜ |
-| ML / ChemBERTa baselines | ⬜ |
-| Write-up / preprint | ⬜ |
