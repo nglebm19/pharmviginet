@@ -19,8 +19,7 @@ An open, non-commercial benchmark for adverse drug event signal detection on FDA
 
 - **Data:** FAERS / legacy AERS quarterly files, 2004Q1–2026Q1 (89 quarters
   collected). Primary-suspect drugs only (`role_cod == "PS"`), deduplicated to the
-  latest `caseversion` per `caseid`. 52.7M rows in `master.parquet`, currently
-  covering 2012 onward only (see Known limitations).
+  latest version per `caseid`. 62.7M rows in `master.parquet`, 2004–2026.
 - **Task A split:** features from reports up to 2022 only; 5 folds grouped by RxNorm
   ingredient (label-held-out ingredients). Evaluation over time is Task B.
 - **Time split** (legacy reference and Task B): train ≤ 2022, val = 2023,
@@ -59,23 +58,22 @@ same event is the meaningful question and matches published ROR-vs-SIDER results
 
 SIDER labels; pairs with ≥ 3 reports up to 2022; all scores computed from reports up
 to 2022 only; 5 ingredient-disjoint folds, so a learned model never trains on the
-SIDER labels of the ingredients it is scored on. 560,334 pairs.
+SIDER labels of the ingredients it is scored on. 715,034 pairs.
 
 | Method | AUC_strat, mean ± sd over folds |
 |---|---|
-| EB05 | 0.609 ± 0.014 |
-| IC (BCPNN) | 0.606 ± 0.020 |
+| EB05 | 0.620 ± 0.005 |
+| IC (BCPNN) | 0.614 ± 0.012 |
 | ROR | 0.602 ± 0.020 |
-| Drug-level-only control | 0.543 ± 0.035 |
+| Drug-level-only control | 0.554 ± 0.021 |
 
-All classical methods land at about 0.60–0.61. Full table, paired differences and
+All classical methods land at about 0.61–0.62. Full table, paired differences and
 fold checks: [MVP.md](MVP.md). Design: FB-D11 in [DECISIONS.md](DECISIONS.md).
 
 ## Known limitations
 
-- **2004–2011 missing:** legacy AERS rows are lost during deduplication, so the
-  current training data covers 2012–2022 only.
-- **Split not scripted:** the train/val/test files were built in a notebook.
+- **No train/val/test split files:** the split writer runs out of memory at the
+  current data size and is being replaced. Task A does not need them.
 - **Label noise:** SIDER negatives rely on a closed-world assumption.
 - **EBGM prior:** the MGPS prior fit is near-degenerate; EBGM still ranks well,
   but its absolute values should not be reported until the fit is fixed.

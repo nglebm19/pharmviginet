@@ -10,10 +10,10 @@ FDA quarterly zips ─ collect_faers.py ─▶ data/raw/ ─▶ data/extracted/<
   ─ audit_faers.py ─▶ data/logs/audit_report.json, schema_map.json
   ─ clean_faers.py
       clean   ─▶ data/processed/{demo,drug,reac,outc,rpsr,ther,indi}.parquet
-      dedup   ─▶ cases_deduped.parquet (latest caseversion per caseid), drug_ps.parquet (role_cod == PS)
+      dedup   ─▶ cases_deduped.parquet (one row per caseid, FB-D12), drug_ps.parquet (role_cod == PS)
       smiles  ─▶ drug_smiles_map.parquet (PubChem)
-      join    ─▶ master.parquet (one row per case × PS drug × PT) + plain time split
-  ─ notebook  ─▶ data/processed/ml/{train,val,test}.parquet (adds ror_train; no script yet)
+      join    ─▶ master.parquet (one row per case × PS drug × PT) + time split (currently fails, see gaps)
+  ─ notebook  ─▶ data/processed/ml_notebook_legacy/ (old 2012+ split with ror_train; stale)
 
 master.parquet ─ labels/drug_norm.py ─▶ data/external/rxnorm_map.parquet
 SIDER download ─ labels/sider.py     ─▶ data/external/sider_pairs.parquet
@@ -30,8 +30,8 @@ task_a_pairs ─ models/baseline.py --task a ─▶ data/logs/task_a_results.jso
 |---|---|---|---|
 | 0 Collect | `collect_faers.py --all` | 89 quarters, 2004Q1–2026Q1 | Done |
 | 1 Audit | `audit_faers.py` | `data/logs/audit_report.json` | Done |
-| 2–5 Clean, dedup, SMILES, join | `clean_faers.py --all` | `master.parquet`, 52.7M rows | Done, 2012+ only |
-| 6 Split | notebook | `ml/{train,val,test}.parquet` | Not scripted |
+| 2–5 Clean, dedup, SMILES, join | `clean_faers.py --all` | `master.parquet`, 62.7M rows, 2004–2026 | Done (SMILES not rerun for legacy names) |
+| 6 Split | `clean_faers.py --stage join` | `ml/{train,val,test}.parquet` | **Missing**: writer killed for memory |
 | 7 Drug normalization | `python -m pharmviginet.labels.drug_norm` | `rxnorm_map.parquet` | Done |
 | 8 SIDER pairs | `python -m pharmviginet.labels.sider` | `sider_pairs.parquet` | Done |
 | 9 Labels | `python -m pharmviginet.labels.build_labels` | `labels_sider.parquet` | Done |
@@ -81,7 +81,7 @@ For each FAERS (drugname, PT) pair with ≥ 3 reports:
 
 `data/task_a.py`, all counts from reports with `year <= FEATURE_CUTOFF_YEAR` (2022):
 
-1. Pair counts and scores up to the cutoff; MGPS prior fitted on all 4.3M pairs.
+1. Pair counts and scores up to the cutoff; MGPS prior fitted on all 5.5M pairs.
 2. Eligible = ≥ 3 distinct reports up to the cutoff, inner-joined with `labels_sider`
    (`drugname, pt, ingredients, label` only).
 3. Ingredients are shuffled (seed 0) and each goes to the fold with the fewest pairs
@@ -104,10 +104,11 @@ Per pair, from distinct reports: `a` (drug and event), `n_drug`, `n_reac`, `N`,
 - **MGPS:** a two-gamma mixture prior fitted by maximum marginal likelihood on a
   zero-truncated negative binomial, with pairs grouped on (a, E rounded to 3 significant
   digits). EBGM is `exp(E[log λ | a])`; EB05 comes from bisection on the mixture CDF.
-  **Known issue:** on 4.3M train pairs the fit is near-degenerate (p ≈ 0.99, α ≈ 3e-5).
+  **Known issue:** the fit is near-degenerate (5.5M pairs up to 2022: p ≈ 0.95, α₁ ≈ 2.4e-4).
 - Legacy `_train` variants use train-period counts; unseen pairs get IC 0, EBGM 1, PRR 1.
   Task A pairs all have ≥ 3 reports up to the cutoff, so no neutral fill is needed;
-  PRR is undefined when `n_reac == a` (8 pairs) and is set to the largest finite PRR.
+  PRR is undefined when `n_reac == a` (0 pairs in the current build) and is then set to
+  the largest finite PRR.
 
 ## Metric
 
@@ -120,8 +121,10 @@ difference from a reference method (IC).
 
 ## Known data gaps
 
-- Legacy AERS rows (2004–2011) are lost at the dedup stage (`MVP.md`, blocker 2).
-- `master.parquet` keeps uppercase legacy columns next to the modern ones, unmerged.
+- No script-built `ml/` split: the in-memory split writer in the join stage is killed at
+  the rebuilt size (`MVP.md`, blocker 1).
+- `drug_smiles_map` was not rebuilt after FB-D12, so legacy-only drug names get `[UNK-MOL]`.
+- Non-key schema differences between eras remain (e.g. legacy `gndr_cod` vs modern `sex`).
 - The `label` column in `master.parquet` is the old ROR rule and does not match
   `ror` (`MVP.md`, blocker 3). Text/mol datasets still train on it.
 - `text_input` is a template, not a narrative.

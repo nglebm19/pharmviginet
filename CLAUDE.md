@@ -67,8 +67,12 @@ Read only when needed: `data/logs/`, `data/processed/`, `pharmviginet/`
 
 ### Always read files like this — never change these params
 ```python
-pd.read_csv(path, sep="$", encoding="latin1", low_memory=False)
+pd.read_csv(path, sep="$", encoding="latin1", low_memory=False, index_col=False)
 ```
+`index_col=False` is required: legacy AERS data rows end with a trailing `$` that the
+header lacks, and without it pandas turns ISR into the index and shifts every column
+left (this silently dropped all 2004–2012Q3 data until FB-D12). Then lowercase the
+headers (legacy files are uppercase: `ISR`, `CASE`, `PT`). Use `clean_faers.load_table_file`.
 
 ### 7 files per quarter
 - `DEMO` — one row per case, primary join key
@@ -133,7 +137,8 @@ df = df.sort_values("caseversion").groupby("caseid").last()
 ---
 
 ## Gotchas & Tribal Knowledge
-- **Phantom column** — trailing `$` creates empty col: `df = df.loc[:, ~df.columns.str.startswith('Unnamed')]`
+- **Trailing `$`** — if a header also ends with `$`, pandas adds an empty col: drop `Unnamed*` columns. If only the data rows end with `$` (legacy AERS), see `index_col=False` above
+- **Canonical forms** — `pt`/`indi_pt` uppercase (FAERS side); SIDER side lowercase; `build_labels` compares both as strip + lower. `primaryid`/`caseid` are `Int64` in every table
 - **Rate limits** — PubChem ≤ 5 req/s (`time.sleep(0.2)`); RxNav ≤ 15 req/s (enforced in `RxNormClient`)
 - **SMILES missing ~15%** — biologics/vaccines have no SMILES, use learned `[UNK-MOL]` embedding
 - **Class balance** — 59% positive under old ROR labels, 29% under SIDER; `POS_WEIGHT=15` in `config.py` fits neither
@@ -143,7 +148,8 @@ df = df.sort_values("caseversion").groupby("caseid").last()
 - **F1 in metrics output is meaningless** — fixed threshold on log scores; ignore it
 - **Drug mapping errors** — RxNav fuzzy matching sometimes picks the wrong ingredient
   (e.g. SIDER `fenofibric` → fenofibrate); unmapped FAERS names are mostly consumer products
-- **Memory** — loading `train.parquet` for pair counts peaks at ~3.8 GB RAM; a full baseline run takes ~95 s
+- **Memory** — machine has 16 GB. `clean_faers.py --stage join` peaks at ~5.9 GB and is killed
+  while writing the in-memory split (MVP blocker 1). Read big parquet with column lists and year filters
 - **`.venv` is minimal** — torch and transformers are **not** installed; add them only when a model needs them. Rebuild:
   `uv venv .venv --python 3.11 && uv pip install --python .venv/bin/python pandas pyarrow requests pytest tqdm scikit-learn scipy`
 - **`git push` can hang** — the macOS keychain helper can block on a hidden prompt. Workaround:
@@ -154,7 +160,7 @@ df = df.sort_values("caseversion").groupby("caseid").last()
 
 ## Useful commands
 ```bash
-.venv/bin/python -m pytest -q tests                                  # 19 tests
+.venv/bin/python -m pytest -q tests                                  # 27 tests
 .venv/bin/python -m pharmviginet.data.task_a                         # Task A pairs + folds, ~50 s; stops on bad fold quality
 .venv/bin/python -m pharmviginet.models.baseline --task a            # Task A leaderboard → data/logs/task_a_results.json, ~50 s
 .venv/bin/python -m pharmviginet.models.baseline --labels sider      # legacy time-split reference → data/logs/baseline_results_sider.json

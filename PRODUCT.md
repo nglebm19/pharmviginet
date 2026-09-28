@@ -41,8 +41,7 @@ computed within each PT and averaged weighted by PT size.
 
 ## Scope
 
-- FAERS and legacy AERS public quarterly files, 2004Q1–2026Q1 (target coverage;
-  the current build only has 2012 onward, see `MVP.md`).
+- FAERS and legacy AERS public quarterly files, 2004Q1–2026Q1.
 - Primary-suspect drugs only, latest case version only.
 - Classical baselines (ROR, PRR, BCPNN/IC, MGPS/EBGM) and learned baselines
   (LightGBM on per-pair features first; molecular models for task C).

@@ -63,7 +63,8 @@ Nothing under `data/` is committed. Users rebuild labels locally with the script
 - Each ingredient belongs to one fold. For fold k, its ingredients are
   **label-held-out ingredients**: their FAERS features are available, their SIDER
   labels are not used for training. PTs appear in every fold, as they should.
-  Combination products whose ingredients span folds are dropped (4.5% of pairs).
+  Combination products whose ingredients span folds are dropped (4.2% of pairs
+  after FB-D12; 4.5% before).
 - Primary metric: per-fold `auc_strat`, reported as mean ± sd, plus the paired
   per-fold difference from IC. All methods are scored on the same fold partition.
 - Required rows: classical scores (computed from reports up to 2022, no labels) and
@@ -89,8 +90,44 @@ Nothing under `data/` is committed. Users rebuild labels locally with the script
   train, but only 2.8% of values match ROR recomputed from `train.parquet`. Replaced
   by `disproportionality.ror` computed in code from reports up to 2022.
 
-**Open limits.** "Up to 2022" is currently 2012–2022 (legacy rows missing, MVP blocker 2).
+**Open limits.** "Up to 2022" covered only 2012–2022 when this was decided; since FB-D12
+it is 2004–2022, and the Task A table in `MVP.md` was rerun.
 Classical scores still benefit from reporting that follows labeling, equally for all
 methods. Revisit this decision if a drug-level-only model reaches the classical level,
 if gains concentrate on drugs with same-class neighbours in training (consider
 ATC-grouped folds), or if fold-to-fold sd hides method differences.
+
+## FB-D12 — Legacy AERS parsing, canonical keys and case dedup (2026-09-27)
+**Decision.**
+- Read every quarterly file with `index_col=False` and lowercase all headers
+  (`clean_faers.load_table_file`). `RENAME_MAP` then maps legacy `isr`/`case` to
+  `primaryid`/`caseid`.
+- `primaryid` and `caseid` are `Int64` in every table. FAERS `pt` and `indi_pt` are
+  stripped and uppercased. SIDER PTs stay lowercase; `build_labels` compares both sides
+  as strip + lower.
+- DEMO dedup keeps one whole row per `caseid`, by priority: highest `caseversion`, then
+  latest `fda_dt`, then highest `primaryid` (ISR) as a deterministic tie-breaker.
+  Legacy rows get `caseversion = 0`, so a case that continues into FAERS keeps its
+  FAERS version. Rows with no `caseid` are dropped (7 legacy rows).
+- `stage_clean` fails if any quarter has null join keys; `stage_dedup` fails if any year
+  with DEMO rows ends with no cases.
+
+**Why.** All 2004–2012Q3 data was silently lost:
+- Legacy data rows end with a trailing `$` that the header lacks, so pandas made ISR the
+  index and shifted every column left (`REAC.ISR` held PT text). Legacy headers are also
+  uppercase, so `RENAME_MAP` never matched. Keys were null for 100% of legacy rows, and
+  `groupby("caseid")` in dedup dropped them all. Fixing only the header case would have
+  made it worse (case numbers in `primaryid`, `I`/`F` in `caseid`).
+- Legacy ISRs (4,204,616–8,626,056) never collide with modern `primaryid` (≥ 30,307,871).
+- 82,316 legacy CASE numbers reappear as modern `caseid`; they are the same cases
+  (sex agrees 99.4% vs 52% for random pairs; event date matches exactly 54%).
+- Legacy has no `caseversion`; 760,330 cases have several ISRs (follow-ups).
+- The old `sort_values` + `groupby.last()` was unstable and mixed fields from different
+  versions per column.
+- PT case: legacy PTs are uppercase, modern mixed case; modern data alone already had
+  1,681 PTs split across case variants. Uppercasing FAERS PTs leaves all 713,399 existing
+  SIDER labels unchanged (checked).
+
+**Result (measured).** `cases_deduped` 17,319,723 → 20,328,567 (+3,008,844 legacy cases;
+modern count unchanged). `drug_ps` +3,010,708 rows. `master.parquet` 52,728,487 →
+62,732,870 rows (+10,004,383 legacy rows; modern rows unchanged), years 2004–2026.

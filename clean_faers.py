@@ -89,11 +89,16 @@ ALL_TABLES = ["DEMO", "DRUG", "REAC", "INDI", "OUTC", "RPSR", "THER"]
 
 def load_table_file(path: Path) -> pd.DataFrame:
     """Load single FAERS/AERS table file with correct params."""
-    df = pd.read_csv(path, sep="$", encoding="latin1", low_memory=False, on_bad_lines="skip")
+    # index_col=False: legacy AERS data rows end with a trailing "$" that the header
+    # lacks; without it pandas silently turns the first column (ISR) into the index
+    # and shifts every other column one place left.
+    df = pd.read_csv(path, sep="$", encoding="latin1", low_memory=False, on_bad_lines="skip",
+                     index_col=False)
     # drop phantom trailing-$ column
     df = df.loc[:, ~df.columns.str.startswith("Unnamed")]
-    # strip BOM artifact on column names (ï»¿primaryid → primaryid)
-    df.columns = [c.encode("latin1").decode("utf-8-sig").strip() if isinstance(c, str) else c
+    # strip BOM artifact on column names (ï»¿primaryid → primaryid); legacy headers are
+    # uppercase (ISR, CASE, PT), modern ones lowercase
+    df.columns = [c.encode("latin1").decode("utf-8-sig").strip().lower() if isinstance(c, str) else c
                   for c in df.columns]
     return df
 
@@ -109,7 +114,25 @@ def normalise_table(df: pd.DataFrame, table: str) -> pd.DataFrame:
     drop_cols = [c for c in df.columns if c.lower() in AERS_DROP]
     if drop_cols:
         df = df.drop(columns=drop_cols)
+    # same integer dtype for IDs in every table, so string keys match in joins
+    for col in ("primaryid", "caseid"):
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
+    # MedDRA terms: legacy files are uppercase, modern mixed case
+    for col in ("pt", "indi_pt"):
+        if col in df.columns:
+            df[col] = df[col].str.strip().str.upper()
     return df
+
+
+def key_coverage(df: pd.DataFrame, table: str) -> dict[str, float]:
+    """Share of non-null join keys: primaryid always, caseid for DEMO."""
+    keys = ["primaryid"] + (["caseid"] if table == "DEMO" else [])
+    return {k: float(df[k].notna().mean()) if k in df.columns else 0.0 for k in keys}
+
+
+# DEMO caseid may be missing on a handful of legacy rows (7 in 2004–2012Q3)
+MIN_COVERAGE = {"primaryid": 1.0, "caseid": 0.999}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -125,6 +148,7 @@ def stage_clean(tables: Optional[list[str]] = None) -> None:
     target_tables = tables or ALL_TABLES
     print(f"[clean] {len(quarters)} quarters × {len(target_tables)} tables")
 
+    bad_keys: list[str] = []
     for table in target_tables:
         chunks: list[pd.DataFrame] = []
         missing = 0
@@ -144,6 +168,11 @@ def stage_clean(tables: Optional[list[str]] = None) -> None:
                 chunks.append(df)
             except Exception as e:
                 print(f"[clean] WARN {qlabel}/{table}: {e}", file=sys.stderr)
+                continue
+            # checked outside the try so a failure cannot be swallowed as a WARN
+            for k, v in key_coverage(df, table).items():
+                if v < MIN_COVERAGE[k]:
+                    bad_keys.append(f"{qlabel}/{table}: {k} non-null {v:.4f}")
 
         if not chunks:
             print(f"[clean] SKIP {table} — no files found", file=sys.stderr)
@@ -158,12 +187,42 @@ def stage_clean(tables: Optional[list[str]] = None) -> None:
         print(f"[clean] {table}: {len(out):,} rows → {out_path} "
               f"({missing} quarters missing)")
 
+    if bad_keys:
+        print("[clean] ERROR: join keys missing —\n  " + "\n  ".join(bad_keys), file=sys.stderr)
+        sys.exit(1)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STAGE 3 — dedup
 # ─────────────────────────────────────────────────────────────────────────────
+def dedup_demo(demo: pd.DataFrame) -> pd.DataFrame:
+    """
+    One row per caseid, kept whole (fields are never mixed across versions).
+    Priority: highest caseversion, then latest fda_dt, then highest primaryid (ISR)
+    as a deterministic tie-breaker. Legacy AERS rows have no caseversion and get 0,
+    so a case that continues into FAERS keeps its FAERS version.
+    """
+    # modifies caseversion / fda_dt in place (DEMO is large; avoid a full copy)
+    demo["caseversion"] = pd.to_numeric(demo["caseversion"], errors="coerce").fillna(0)
+    no_case = demo["caseid"].isna()
+    if no_case.any():
+        print(f"[dedup] dropping {no_case.sum():,} DEMO rows with no caseid", file=sys.stderr)
+        demo = demo[~no_case]
+    demo["fda_dt"] = pd.to_numeric(demo["fda_dt"], errors="coerce")
+    return (demo
+            .sort_values(["caseversion", "fda_dt", "primaryid"], kind="stable", na_position="first")
+            .drop_duplicates("caseid", keep="last"))
+
+
+def check_year_coverage(before: pd.DataFrame, after: pd.DataFrame) -> list[str]:
+    """Years that have DEMO rows but no case left after dedup."""
+    b = before.groupby("year").size()
+    a = after.groupby("year").size().reindex(b.index, fill_value=0)
+    return [f"{y}: {b[y]:,} rows → 0 cases" for y in b.index if a[y] == 0]
+
+
 def stage_dedup() -> None:
-    # --- DEMO dedup: keep latest caseversion per caseid ---
+    # --- DEMO dedup: keep latest version per caseid ---
     demo_path = PROCESSED / "demo.parquet"
     if not demo_path.exists():
         print("[dedup] demo.parquet missing — run --stage clean first", file=sys.stderr)
@@ -172,16 +231,15 @@ def stage_dedup() -> None:
     print("[dedup] Loading demo.parquet …")
     demo = pd.read_parquet(demo_path)
     before = len(demo)
+    years_before = demo[["year"]]
 
-    if "caseversion" in demo.columns and "caseid" in demo.columns:
-        demo["caseversion"] = pd.to_numeric(demo["caseversion"], errors="coerce").fillna(0)
-        demo = (demo
-                .sort_values("caseversion")
-                .groupby("caseid", as_index=False)
-                .last())
-    else:
-        # AERS era: no caseversion — dedup on primaryid
-        demo = demo.drop_duplicates(subset=["primaryid"], keep="last")
+    demo = dedup_demo(demo)
+    empty = check_year_coverage(years_before, demo)
+    if empty:
+        print("[dedup] ERROR: years lost in dedup —\n  " + "\n  ".join(empty), file=sys.stderr)
+        sys.exit(1)
+    print("[dedup] cases per year: " + ", ".join(
+        f"{y}: {n:,}" for y, n in demo.groupby("year").size().items()))
 
     after = len(demo)
     out_path = PROCESSED / "cases_deduped.parquet"
