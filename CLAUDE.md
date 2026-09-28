@@ -92,8 +92,8 @@ headers (legacy files are uppercase: `ISR`, `CASE`, `PT`). Use `clean_faers.load
 - Benchmark label = SIDER 4.1 (`FB-D2`). Rules: `ARCHITECTURE.md`.
 - The `label` column in `master.parquet` / `ml/*.parquet` is the **old circular ROR
   rule**, kept only for comparison. Don't train or score against it.
-- The `ror_train` column in `ml/{val,test}.parquet` was built in the notebook and cannot
-  be reproduced from `train.parquet`. Don't use it; Task A computes ROR in code.
+- The old notebook-built `ror_train` column could not be reproduced and is gone; the
+  script-built `ml/` files have master's columns only. ROR is always computed in code.
 - Task A eligibility comes from reports up to 2022 only; never use `labels_sider.n_reports`
   (all years) for Task A.
 
@@ -148,8 +148,11 @@ df = df.sort_values("caseversion").groupby("caseid").last()
 - **F1 in metrics output is meaningless** — fixed threshold on log scores; ignore it
 - **Drug mapping errors** — RxNav fuzzy matching sometimes picks the wrong ingredient
   (e.g. SIDER `fenofibric` → fenofibrate); unmapped FAERS names are mostly consumer products
-- **Memory** — machine has 16 GB. `clean_faers.py --stage join` peaks at ~5.9 GB and is killed
-  while writing the in-memory split (MVP blocker 1). Read big parquet with column lists and year filters
+- **Memory** — machine has 16 GB. `--stage join` peaks at ~5.9 GB (master build only).
+  `--stage split` streams one row group at a time: ~2.32 GB peak, operational limit 3 GB.
+  `baseline --task timesplit` peaks at ~4.1 GB. Read big parquet with column lists and year filters
+- **Split completeness** — `ml/split_manifest.json` is written last; if it is missing or
+  `clean_faers.check_split` reports problems, treat `ml/` as incomplete. Split years live in `config.py`
 - **`.venv` is minimal** — torch and transformers are **not** installed; add them only when a model needs them. Rebuild:
   `uv venv .venv --python 3.11 && uv pip install --python .venv/bin/python pandas pyarrow requests pytest tqdm scikit-learn scipy`
 - **`git push` can hang** — the macOS keychain helper can block on a hidden prompt. Workaround:
@@ -160,7 +163,8 @@ df = df.sort_values("caseversion").groupby("caseid").last()
 
 ## Useful commands
 ```bash
-.venv/bin/python -m pytest -q tests                                  # 27 tests
+.venv/bin/python -m pytest -q tests                                  # 35 tests
+.venv/bin/python clean_faers.py --stage split                        # ml/ split from master.parquet, ~90 s
 .venv/bin/python -m pharmviginet.data.task_a                         # Task A pairs + folds, ~50 s; stops on bad fold quality
 .venv/bin/python -m pharmviginet.models.baseline --task a            # Task A leaderboard → data/logs/task_a_results.json, ~50 s
 .venv/bin/python -m pharmviginet.models.baseline --labels sider      # legacy time-split reference → data/logs/baseline_results_sider.json

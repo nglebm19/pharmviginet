@@ -21,15 +21,16 @@ v0 is ready to make public when all of these hold:
 - [x] Audit files and schemas (`audit_faers.py` → `data/logs/audit_report.json`)
 - [x] Clean, dedup, join → `master.parquet`, 62,732,870 rows, 2004–2026
       (52,728,487 FAERS + 10,004,383 legacy AERS rows; `cases_deduped` 20,328,567 cases)
-- [ ] Time split → `ml/{train,val,test}.parquet` — **missing** (blocker 1). The join
-      stage was killed while writing it; the old notebook-built split is kept in
-      `data/processed/ml_notebook_legacy/` (2012+ data only, stale)
+- [x] Time split → `ml/{train,val,test}.parquet` from `clean_faers.py --stage split`
+      (FB-D13): 46,589,011 / 4,237,245 / 11,906,614 rows (2004–2022 / 2023 / 2024–2026),
+      `ml/split_manifest.json` written last. The old notebook split is kept, stale, in
+      `data/processed/ml_notebook_legacy/`
 - [x] Drug names → RxNorm ingredients: 74.5% of 43,099 names mapped
 - [x] SIDER pairs: 134,844 (ingredient, PT) pairs, 1,264 ingredients
 - [x] SIDER labels: 860,422 pairs, 28.2% positive, 11,732 drug names
 - [x] Task A dataset: 715,034 pairs in 5 ingredient-disjoint folds (`data/task_a.py`)
 - [x] Classical baselines and drug-level control on Task A folds (below)
-- [x] Tests: 27 pass (`pytest tests`)
+- [x] Tests: 35 pass (`pytest tests`)
 - [ ] LightGBM baseline
 - [ ] Task B, task C
 - [ ] Public release (repo, dataset card, leaderboard), write-up. The GitHub repo
@@ -75,25 +76,23 @@ Reading the table:
 
 ### Legacy time-split reference (not Task A)
 
-The earlier table (test split 2024–2026Q1, 309,522 pairs, IC/EBGM 0.615) is kept in
-`data/logs/baseline_results_sider.json` (`baseline --task timesplit --labels sider`).
+`baseline --task timesplit --labels sider` writes `data/logs/baseline_results_sider.json`.
+It now runs on the script-built split (2004–2026 data, 327,514 test pairs) and is kept
+only as a downstream compatibility check; its numbers are not analysed. The earlier
+notebook-based table (2012+ data, 309,522 test pairs, IC/EBGM 0.615) is preserved in
+`data/logs/baseline_results_sider_notebook_2012.json`.
 It is not comparable with Task A: its eval set and its SIDER eligibility used post-2022
 reports, `ROR_all` and within-split `PRR` used eval-period data, and the notebook-built
-`ror_train` column cannot be reproduced from `train.parquet`. It was computed on the
-2012+ data and can no longer be rerun (it needs `ror_train`); the JSON is historical.
+`ror_train` column could not be reproduced from `train.parquet`. `ROR_train` is now
+computed in code from train-split counts (FB-D13).
 
 ## Blockers for v0
 
-1. **No reproducible train/val/test split.** `data/processed/ml/` is currently empty.
-   The in-memory split writer in `clean_faers.py --stage join` is not safe at the
-   rebuilt size: on 2026-09-27 the process was killed (16 GB machine, 5.9 GB peak RSS)
-   after `master.parquet` was fully written but before any split file was written.
-   A fix should write each split straight from `master.parquet` with pyarrow year
-   filters (or another memory-safe approach). The earlier split came from
-   `notebooks/PharmVigiNet_train.ipynb` and is kept, stale, in
-   `data/processed/ml_notebook_legacy/`. Task A does not need `ml/`; the paused
-   text/mol models and `baseline --task timesplit` do. `scripts/run_pipeline.sh`
-   only runs model training, not the pipeline.
+1. **Pipeline is not one command yet.** The split is now scripted and memory-bounded
+   (FB-D13; resolved 2026-09-27). The earlier in-memory writer was killed at 5.9 GB peak
+   RSS; the streamed writer peaks at ~2.32 GB (operational limit 3 GB, machine 16 GB).
+   Still open: `scripts/run_pipeline.sh` only runs model training, so collect → audit →
+   clean → split → labels → Task A is not yet a single command.
 2. ~~2004–2011 data is missing.~~ **Resolved (FB-D12).** Legacy rows were lost at
    parsing (trailing `$` shifted every column) and dropped at dedup. Now 2004–2026.
 3. **Old ROR label does not match `ror`.** The `label` column was supposedly derived
@@ -106,16 +105,14 @@ reports, `ROR_all` and within-split `PRR` used eval-period data, and the noteboo
 
 ## Queue (agreed order)
 
-1. **Reproducible pipeline.** No plan approved yet; start in PLAN mode. Move the split into a script (e.g.
-   `pharmviginet/data/build_dataset.py`); make one command run
-   collect → audit → clean → split → labels → baselines, with a memory-safe split
-   writer (blocker 1). Resolve blockers 3–4 here.
-2. **LightGBM baseline** on per-pair features: time trends, age/sex mix, outcomes,
+1. **LightGBM baseline (next)** on per-pair features: time trends, age/sex mix, outcomes,
    reporter type, indications and the classical scores. Evaluate on the Task A
-   ingredient-disjoint folds (FB-D11, resolved); beat IC per fold and the drug-level control.
-3. **Fix the EBGM prior fit.** Try fitting without zero truncation, or floor α.
-4. **Task B:** FDA SrLC label-change dates. SrLC has no bulk export, so this needs a
+   ingredient-disjoint folds (FB-D11); beat IC per fold and the drug-level control.
+   The split writer is done (FB-D13); a one-command `run_pipeline.sh` and blockers 3–4
+   remain open but are not on its path.
+2. **Fix the EBGM prior fit.** Try fitting without zero truncation, or floor α.
+3. **Task B:** FDA SrLC label-change dates. SrLC has no bulk export, so this needs a
    scraper. Most novel part of the benchmark.
-5. **Task C:** report-sparse drugs (few or no reports up to the cutoff). Where ChemBERTa may help.
+4. **Task C:** report-sparse drugs (few or no reports up to the cutoff). Where ChemBERTa may help.
 
 Deprioritized: PubMedBERT text model and fusion (no narratives in public FAERS, FB-D9).

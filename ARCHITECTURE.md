@@ -12,8 +12,8 @@ FDA quarterly zips ─ collect_faers.py ─▶ data/raw/ ─▶ data/extracted/<
       clean   ─▶ data/processed/{demo,drug,reac,outc,rpsr,ther,indi}.parquet
       dedup   ─▶ cases_deduped.parquet (one row per caseid, FB-D12), drug_ps.parquet (role_cod == PS)
       smiles  ─▶ drug_smiles_map.parquet (PubChem)
-      join    ─▶ master.parquet (one row per case × PS drug × PT) + time split (currently fails, see gaps)
-  ─ notebook  ─▶ data/processed/ml_notebook_legacy/ (old 2012+ split with ror_train; stale)
+      join    ─▶ master.parquet (one row per case × PS drug × PT)
+      split   ─▶ data/processed/ml/{train,val,test}.parquet + split_manifest.json (streamed, FB-D13)
 
 master.parquet ─ labels/drug_norm.py ─▶ data/external/rxnorm_map.parquet
 SIDER download ─ labels/sider.py     ─▶ data/external/sider_pairs.parquet
@@ -31,7 +31,7 @@ task_a_pairs ─ models/baseline.py --task a ─▶ data/logs/task_a_results.jso
 | 0 Collect | `collect_faers.py --all` | 89 quarters, 2004Q1–2026Q1 | Done |
 | 1 Audit | `audit_faers.py` | `data/logs/audit_report.json` | Done |
 | 2–5 Clean, dedup, SMILES, join | `clean_faers.py --all` | `master.parquet`, 62.7M rows, 2004–2026 | Done (SMILES not rerun for legacy names) |
-| 6 Split | `clean_faers.py --stage join` | `ml/{train,val,test}.parquet` | **Missing**: writer killed for memory |
+| 6 Split | `clean_faers.py --stage split` | `ml/{train,val,test}.parquet`, `ml/split_manifest.json` | Done: 46.6M / 4.2M / 11.9M rows |
 | 7 Drug normalization | `python -m pharmviginet.labels.drug_norm` | `rxnorm_map.parquet` | Done |
 | 8 SIDER pairs | `python -m pharmviginet.labels.sider` | `sider_pairs.parquet` | Done |
 | 9 Labels | `python -m pharmviginet.labels.build_labels` | `labels_sider.parquet` | Done |
@@ -77,6 +77,19 @@ For each FAERS (drugname, PT) pair with ≥ 3 reports:
   every ingredient and the PT are in SIDER but the pair is not listed, and drops the rest.
   PTs are matched lowercase.
 
+## Split (stage 6)
+
+`clean_faers.write_splits` reads `master.parquet` one row group at a time, in file order,
+and routes each row to exactly one split. Year bounds come from `config.py`
+(`TRAIN_MAX_YEAR = FEATURE_CUTOFF_YEAR = 2022`, `VAL_YEARS = 2023`, `TEST_MIN_YEAR = 2024`).
+Output has master's schema exactly. Files are written to `.tmp-*` names and checked
+(row totals equal master, year bounds, no empty split, schema); only then are they
+published, and `split_manifest.json` is written **last** as the completion marker
+(source rows, schema, rows and year range per split, rows by year).
+`check_split` treats a missing or inconsistent manifest as an incomplete split.
+Memory is bounded by one row group (~440–540 MB in Arrow): observed peak ~2.32 GB RSS,
+operational limit 3 GB.
+
 ## Task A folds
 
 `data/task_a.py`, all counts from reports with `year <= FEATURE_CUTOFF_YEAR` (2022):
@@ -98,7 +111,8 @@ Per pair, from distinct reports: `a` (drug and event), `n_drug`, `n_reac`, `N`,
 
 - **ROR:** `a·d / ((b+0.5)(c+0.5))`. Task A uses `disproportionality.ror` on counts up
   to 2022. Legacy columns: `ror` (`clean_faers.compute_ror`, all of `master.parquet`,
-  eval years included) and `ror_train` (notebook; cannot be reproduced from `train.parquet`).
+  eval years included). The legacy time split computes `ror_train` from train-split
+  counts in `baseline.train_counts`; the split files carry no `ror_train` column.
 - **PRR:** `(a / n_drug) / ((n_reac − a) / (N − n_drug))`.
 - **BCPNN:** `IC = log2((a+0.5)/(E+0.5))`; IC025 by Norén's closed-form approximation.
 - **MGPS:** a two-gamma mixture prior fitted by maximum marginal likelihood on a
@@ -121,8 +135,6 @@ difference from a reference method (IC).
 
 ## Known data gaps
 
-- No script-built `ml/` split: the in-memory split writer in the join stage is killed at
-  the rebuilt size (`MVP.md`, blocker 1).
 - `drug_smiles_map` was not rebuilt after FB-D12, so legacy-only drug names get `[UNK-MOL]`.
 - Non-key schema differences between eras remain (e.g. legacy `gndr_cod` vs modern `sex`).
 - The `label` column in `master.parquet` is the old ROR rule and does not match
@@ -132,7 +144,7 @@ difference from a reference method (IC).
 
 ## Planned components (not designed yet)
 
-- Split script replacing the notebook; one-command pipeline.
+- One-command pipeline (`scripts/run_pipeline.sh`).
 - LightGBM on per-pair features (time trends, demographics, outcomes, reporter type,
   indications, classical scores).
 - Task B: SrLC label-change scraper and a lead-time metric.

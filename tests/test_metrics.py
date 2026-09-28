@@ -47,7 +47,7 @@ def test_load_split_pair_level_dedups(tmp_path):
     df = pd.DataFrame({
         "label": [1, 1, 0], "ror": [2.0, 2.0, 0.5], "ror_lower_ci": [1.1, 1.1, 0.2],
         "n_reports": [2, 2, 1], "drugname": ["D", "D", "D"], "pt": ["E", "E", "F"],
-        "ror_train": [2.0, 2.0, np.nan], "primaryid": ["1", "2", "3"],
+        "primaryid": ["1", "2", "3"],
     })
     path = tmp_path / "split.parquet"
     df.to_parquet(path)

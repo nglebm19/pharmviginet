@@ -38,3 +38,9 @@ TASK_A_SEED         = 0
 TASK_A_PAIRS        = PROCESSED / "task_a_pairs.parquet"
 TASK_A_FOLDS        = PROCESSED / "task_a_folds.parquet"
 TASK_A_RESULTS      = LOGS / "task_a_results.json"
+
+# Train/val/test split of master.parquet (clean_faers.py --stage split)
+TRAIN_MAX_YEAR = FEATURE_CUTOFF_YEAR
+VAL_YEARS      = (2023, 2023)
+TEST_MIN_YEAR  = 2024
+SPLIT_MANIFEST = ML_DIR / "split_manifest.json"

@@ -6,27 +6,36 @@ Usage:
     python clean_faers.py --stage clean     # stage 2: normalize + concat → parquet
     python clean_faers.py --stage dedup     # stage 3: dedup cases, PS-filter drugs
     python clean_faers.py --stage smiles    # stage 4: PubChem SMILES lookup
-    python clean_faers.py --stage join      # stage 5: master.parquet + ML split
-    python clean_faers.py --all             # run stages 2→3→4→5 in sequence
+    python clean_faers.py --stage join      # stage 5: master.parquet
+    python clean_faers.py --stage split     # stage 6: ml/{train,val,test}.parquet, streamed
+    python clean_faers.py --all             # run stages 2→3→4→5→6 in sequence
     python clean_faers.py --stage clean --table DEMO   # single table (debug)
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 import sys
 from pathlib import Path
 from typing import Optional
 
 import pandas as pd
+import pyarrow as pa
+import pyarrow.compute as pc
+import pyarrow.parquet as pq
 import requests
 from tqdm import tqdm
+
+from pharmviginet.config import (
+    MASTER_PARQUET, SPLIT_MANIFEST, TEST_MIN_YEAR, TEST_PARQUET, TRAIN_MAX_YEAR, TRAIN_PARQUET,
+    VAL_PARQUET, VAL_YEARS,
+)
 
 # ── paths ──────────────────────────────────────────────────────────────────────
 EXTRACT_DIR  = Path("data/extracted")
 PROCESSED    = Path("data/processed")
-ML_DIR       = PROCESSED / "ml"
 LOG_DIR      = Path("data/logs")
 AUDIT_REPORT = LOG_DIR / "audit_report.json"
 
@@ -374,8 +383,6 @@ def compute_ror(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def stage_join() -> None:
-    ML_DIR.mkdir(parents=True, exist_ok=True)
-
     for name, path in [
         ("cases_deduped", PROCESSED / "cases_deduped.parquet"),
         ("drug_ps",       PROCESSED / "drug_ps.parquet"),
@@ -441,31 +448,167 @@ def stage_join() -> None:
     df.to_parquet(out_path, index=False)
     print(f"[join] master.parquet: {len(df):,} rows, {df['label'].mean():.1%} positive → {out_path}")
 
-    # time split — hard constraint
-    train = df[df["year"] <= 2022]
-    val   = df[df["year"] == 2023]
-    test  = df[df["year"] >= 2024]
+    print("[join] Next: python clean_faers.py --stage split")
 
-    train.to_parquet(ML_DIR / "train.parquet", index=False)
-    val.to_parquet(ML_DIR / "val.parquet",   index=False)
-    test.to_parquet(ML_DIR / "test.parquet",  index=False)
 
-    print(f"[join] ML split → train={len(train):,} val={len(val):,} test={len(test):,}")
-    print(f"[join]   train positive: {train['label'].mean():.1%}")
-    print(f"[join]   val   positive: {val['label'].mean():.1%}")
-    print(f"[join]   test  positive: {test['label'].mean():.1%}")
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 6 — split (streamed from master.parquet, one row group at a time)
+# ─────────────────────────────────────────────────────────────────────────────
+def split_bounds() -> dict[str, tuple[int, int]]:
+    """Inclusive year ranges per split, from pharmviginet.config (time split — hard constraint)."""
+    return {"train": (0, TRAIN_MAX_YEAR), "val": VAL_YEARS, "test": (TEST_MIN_YEAR, 9999)}
+
+
+def _year_range(pf: pq.ParquetFile, rg: int) -> Optional[tuple[int, int]]:
+    col = pf.schema_arrow.get_field_index("year")
+    st = pf.metadata.row_group(rg).column(col).statistics
+    return (int(st.min), int(st.max)) if st is not None and st.has_min_max else None
+
+
+def _schema_desc(schema: pa.Schema) -> list[list[str]]:
+    return [[f.name, str(f.type)] for f in schema]
+
+
+def write_splits(src: Path, paths: dict[str, Path], bounds: dict[str, tuple[int, int]],
+                 manifest: Path) -> dict:
+    """
+    Stream src into one parquet file per split, reading one row group at a time in file
+    order. Each split is written to a temp file and checked (row totals, year bounds,
+    non-empty, schema). Only then are the files published, and the manifest is written
+    last: a split without a consistent manifest is incomplete (see check_split).
+    """
+    pf = pq.ParquetFile(src)
+    schema = pf.schema_arrow
+    tmp = {k: p.with_name(f".tmp-{p.name}") for k, p in paths.items()}
+    for p in tmp.values():
+        p.parent.mkdir(parents=True, exist_ok=True)
+    writers = {k: pq.ParquetWriter(tmp[k], schema) for k in paths}
+    rows = {k: 0 for k in paths}
+    years: dict[str, dict[int, int]] = {k: {} for k in paths}
+    try:
+        for rg in range(pf.num_row_groups):
+            yr = _year_range(pf, rg)
+            wanted = [k for k, (lo, hi) in bounds.items()
+                      if yr is None or not (yr[1] < lo or yr[0] > hi)]
+            if not wanted:
+                continue
+            t = pf.read_row_group(rg)
+            year = t.column("year")
+            for k in wanted:
+                lo, hi = bounds[k]
+                part = t.filter(pc.and_(pc.greater_equal(year, lo), pc.less_equal(year, hi)))
+                if part.num_rows:
+                    writers[k].write_table(part)
+                    rows[k] += part.num_rows
+                    for v in pc.value_counts(part.column("year")).to_pylist():
+                        years[k][v["values"]] = years[k].get(v["values"], 0) + v["counts"]
+            del t, year
+        for w in writers.values():
+            w.close()
+
+        errors = []
+        n_src = pf.metadata.num_rows
+        if sum(rows.values()) != n_src:
+            errors.append(f"split rows {sum(rows.values()):,} != master rows {n_src:,}")
+        for k, (lo, hi) in bounds.items():
+            if rows[k] == 0:
+                errors.append(f"{k}: no rows")
+                continue
+            out = pq.ParquetFile(tmp[k])
+            if out.metadata.num_rows != rows[k]:
+                errors.append(f"{k}: file rows {out.metadata.num_rows:,} != written {rows[k]:,}")
+            if not out.schema_arrow.equals(schema):
+                errors.append(f"{k}: schema differs from master")
+            if min(years[k]) < lo or max(years[k]) > hi:
+                errors.append(f"{k}: years {min(years[k])}–{max(years[k])} outside {lo}–{hi}")
+        if errors:
+            raise ValueError("; ".join(errors))
+    except BaseException:
+        for w in writers.values():
+            try:
+                w.close()
+            except Exception:
+                pass
+        for p in tmp.values():
+            p.unlink(missing_ok=True)
+        raise
+
+    # publish: drop the old marker first, then the files, then the new manifest
+    manifest.unlink(missing_ok=True)
+    for k in paths:
+        os.replace(tmp[k], paths[k])
+    info = {
+        "source": str(src), "source_rows": pf.metadata.num_rows,
+        "schema": _schema_desc(schema),
+        "splits": {k: {"file": paths[k].name, "rows": rows[k], "year_bounds": list(bounds[k]),
+                       "year_min": min(years[k]), "year_max": max(years[k]),
+                       "rows_by_year": {str(y): n for y, n in sorted(years[k].items())}}
+                   for k in paths},
+        "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+    tmp_manifest = manifest.with_name(f".tmp-{manifest.name}")
+    tmp_manifest.write_text(json.dumps(info, indent=2))
+    os.replace(tmp_manifest, manifest)
+    return info
+
+
+def check_split(paths: dict[str, Path], manifest: Path, src: Optional[Path] = None) -> list[str]:
+    """Problems with a published split; empty list = complete and consistent."""
+    if not manifest.exists():
+        return [f"{manifest.name} missing — split incomplete"]
+    info = json.loads(manifest.read_text())
+    problems = []
+    if src is not None and pq.ParquetFile(src).metadata.num_rows != info["source_rows"]:
+        problems.append("master row count changed since the split was written")
+    if sum(v["rows"] for v in info["splits"].values()) != info["source_rows"]:
+        problems.append("manifest split rows do not add up to source rows")
+    for k, p in paths.items():
+        m = info["splits"].get(k)
+        if m is None or not p.exists():
+            problems.append(f"{k}: missing from manifest or disk")
+            continue
+        f = pq.ParquetFile(p)
+        if f.metadata.num_rows != m["rows"]:
+            problems.append(f"{k}: file rows {f.metadata.num_rows:,} != manifest {m['rows']:,}")
+        if _schema_desc(f.schema_arrow) != info["schema"]:
+            problems.append(f"{k}: schema differs from manifest")
+        lo, hi = m["year_bounds"]
+        if m["year_min"] < lo or m["year_max"] > hi:
+            problems.append(f"{k}: years outside bounds")
+    return problems
+
+
+def stage_split() -> None:
+    if not MASTER_PARQUET.exists():
+        print(f"[split] {MASTER_PARQUET} missing — run --stage join first", file=sys.stderr)
+        sys.exit(1)
+    paths = {"train": TRAIN_PARQUET, "val": VAL_PARQUET, "test": TEST_PARQUET}
+    bounds = split_bounds()
+    print(f"[split] {MASTER_PARQUET.name} → " + ", ".join(f"{k} {lo}–{hi}" for k, (lo, hi) in bounds.items()))
+    try:
+        info = write_splits(MASTER_PARQUET, paths, bounds, SPLIT_MANIFEST)
+    except ValueError as e:
+        print(f"[split] ERROR: {e} — nothing published", file=sys.stderr)
+        sys.exit(1)
+    problems = check_split(paths, SPLIT_MANIFEST, MASTER_PARQUET)
+    if problems:
+        print("[split] ERROR: " + "; ".join(problems), file=sys.stderr)
+        sys.exit(1)
+    for k, v in info["splits"].items():
+        print(f"[split] {k}: {v['rows']:,} rows, years {v['year_min']}–{v['year_max']} → {paths[k]}")
+    print(f"[split] manifest → {SPLIT_MANIFEST}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CLI
 # ─────────────────────────────────────────────────────────────────────────────
 def main() -> None:
-    parser = argparse.ArgumentParser(description="PharmVigiNet pipeline stages 2–5")
+    parser = argparse.ArgumentParser(description="PharmVigiNet pipeline stages 2–6")
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--stage", choices=["clean", "dedup", "smiles", "join"],
+    group.add_argument("--stage", choices=["clean", "dedup", "smiles", "join", "split"],
                        help="Run a single stage")
     group.add_argument("--all", action="store_true",
-                       help="Run all stages 2→3→4→5 in sequence")
+                       help="Run all stages 2→3→4→5→6 in sequence")
     parser.add_argument("--table", nargs="+",
                         help="(--stage clean only) restrict to specific tables")
     args = parser.parse_args()
@@ -479,6 +622,8 @@ def main() -> None:
         stage_smiles()
         print("\n=== Stage 5: join ===")
         stage_join()
+        print("\n=== Stage 6: split ===")
+        stage_split()
     elif args.stage == "clean":
         tables = [t.upper() for t in args.table] if args.table else None
         stage_clean(tables)
@@ -488,6 +633,8 @@ def main() -> None:
         stage_smiles()
     elif args.stage == "join":
         stage_join()
+    elif args.stage == "split":
+        stage_split()
 
 
 if __name__ == "__main__":

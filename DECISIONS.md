@@ -131,3 +131,23 @@ ATC-grouped folds), or if fold-to-fold sd hides method differences.
 **Result (measured).** `cases_deduped` 17,319,723 → 20,328,567 (+3,008,844 legacy cases;
 modern count unchanged). `drug_ps` +3,010,708 rows. `master.parquet` 52,728,487 →
 62,732,870 rows (+10,004,383 legacy rows; modern rows unchanged), years 2004–2026.
+
+## FB-D13 — Train/val/test files are streamed from master.parquet (2026-09-27)
+**Decision.** `clean_faers.py --stage split` (also in `--all`, after `join`) writes
+`ml/{train,val,test}.parquet` from `master.parquet` in one pass, one row group at a time,
+in file order. Year bounds come from `config.py` (train ≤ `FEATURE_CUTOFF_YEAR` = 2022,
+val 2023, test ≥ 2024). Output has exactly master's columns — no notebook-only columns.
+Files are checked before publishing, and `ml/split_manifest.json` is written last as the
+completion marker; a missing or inconsistent manifest means the split is incomplete.
+The legacy time-split baseline computes `ror_train` from train-split counts.
+
+**Why.** The old split in `stage_join` copied the 62.7M-row pandas frame into three
+masked slices and converted each to Arrow while everything stayed in memory; the process
+was killed after writing `master.parquet` (5.9 GB peak RSS). The notebook-built split
+carried a `ror_train` column that could not be reproduced.
+
+**Result (measured).** 46,589,011 / 4,237,245 / 11,906,614 rows (2004–2022 / 2023 /
+2024–2026), summing to master's 62,732,870; ~90 s; peak RSS ~2.32 GB, bounded by one row
+group (~440–540 MB in Arrow), not by dataset size. Operational limit 3 GB on the current
+16 GB machine. Smaller batches (`iter_batches`) are the fallback if a lower-memory machine
+must be supported.

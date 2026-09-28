@@ -72,8 +72,6 @@ fold checks: [MVP.md](MVP.md). Design: FB-D11 in [DECISIONS.md](DECISIONS.md).
 
 ## Known limitations
 
-- **No train/val/test split files:** the split writer runs out of memory at the
-  current data size and is being replaced. Task A does not need them.
 - **Label noise:** SIDER negatives rely on a closed-world assumption.
 - **EBGM prior:** the MGPS prior fit is near-degenerate; EBGM still ranks well,
   but its absolute values should not be reported until the fit is fixed.
@@ -98,9 +96,10 @@ python audit_faers.py
 # 4. Clean, deduplicate, normalize, join → data/processed/master.parquet
 python clean_faers.py --all
 
-# 5. Time split → data/processed/ml/{train,val,test}.parquet
-#    TODO: currently done in a notebook; a script is planned (see MVP.md).
+# 5. Time split → data/processed/ml/{train,val,test}.parquet + split_manifest.json
+#    (included in --all; streamed from master.parquet, peak ~2.3 GB RAM)
 #    Rule: train = year <= 2022, val = year == 2023, test = year >= 2024
+python clean_faers.py --stage split
 
 # 6. Map FAERS drug names to RxNorm ingredients → data/external/rxnorm_map.parquet
 python -m pharmviginet.labels.drug_norm

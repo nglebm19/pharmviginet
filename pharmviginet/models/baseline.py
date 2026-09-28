@@ -10,7 +10,8 @@ Usage:
     python -m pharmviginet.models.baseline --task a         # Task A: ingredient-disjoint folds
 
 --task timesplit (default) is the legacy time-split reference. It is not Task A:
-ROR_all and within-split PRR use eval-period data (FB-D11).
+ROR_all and within-split PRR use eval-period data (FB-D11). ROR_train is computed
+here from train-split counts; the split files carry no ror_train column (FB-D13).
 """
 from __future__ import annotations
 
@@ -28,11 +29,11 @@ from pharmviginet.config import (
 )
 from pharmviginet.models import drug_control
 from pharmviginet.models.disproportionality import (
-    bcpnn, compute_prr, ebgm, fit_mgps_prior, pair_counts, prr,
+    bcpnn, compute_prr, ebgm, fit_mgps_prior, pair_counts, prr, ror,
 )
 from pharmviginet.utils.metrics import compute_metrics, fold_metrics, print_metrics, save_metrics
 
-COLS = ["label", "ror", "ror_lower_ci", "n_reports", "drugname", "pt", "ror_train", "primaryid"]
+COLS = ["label", "ror", "ror_lower_ci", "n_reports", "drugname", "pt", "primaryid"]
 PAIR = ["drugname", "pt"]
 
 
@@ -46,11 +47,12 @@ def train_counts() -> tuple[pd.DataFrame, tuple]:
     c["drugname"] = c["drugname"].astype(str)
     c["pt"] = c["pt"].astype(str)
     c["prr_train"] = prr(c)
+    c["ror_train"] = ror(c)
     c["ic"], c["ic025"] = bcpnn(c["a"], c["E"])
     prior = fit_mgps_prior(c["a"].values, c["E"].values)
     print(f"  {len(c):,} train pairs; MGPS prior (a1,b1,a2,b2,p) = "
           + ", ".join(f"{v:.4g}" for v in prior))
-    return c[PAIR + ["a", "E", "prr_train", "ic", "ic025"]], prior
+    return c[PAIR + ["a", "E", "prr_train", "ror_train", "ic", "ic025"]], prior
 
 
 def add_train_scores(df: pd.DataFrame, counts: pd.DataFrame, prior: tuple) -> pd.DataFrame:
