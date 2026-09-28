@@ -55,9 +55,42 @@ knowledge rather than learn from reports.
 Nothing under `data/` is committed. Users rebuild labels locally with the scripts.
 **Why:** v0 criteria in `MVP.md` are not met; SIDER's CC BY-NC-SA / MedDRA terms.
 
-## FB-D11 — OPEN: leakage-safe split for learned models
-SIDER labels are static, so a model trained on train-period pairs sees most test
-pairs, with their labels, during training. The time split alone does not prevent
-this. Options: drug-disjoint (overlaps task C), pair-disjoint, or train only on pairs
-first seen before a cutoff and test on pairs first seen after it.
-Must be decided before the LightGBM baseline.
+## FB-D11 — Task A uses ingredient-disjoint folds (resolved 2026-09-27)
+**Decision.** Task A = SIDER labels + features from reports up to 2022 only +
+5 ingredient-disjoint folds grouped by RxNorm ingredient.
+- Eligibility: ≥ 3 distinct reports up to 2022, computed in `data/task_a.py`.
+  From `labels_sider` only `drugname`, `pt`, `ingredients` and `label` are used.
+- Each ingredient belongs to one fold. For fold k, its ingredients are
+  **label-held-out ingredients**: their FAERS features are available, their SIDER
+  labels are not used for training. PTs appear in every fold, as they should.
+  Combination products whose ingredients span folds are dropped (4.5% of pairs).
+- Primary metric: per-fold `auc_strat`, reported as mean ± sd, plus the paired
+  per-fold difference from IC. All methods are scored on the same fold partition.
+- Required rows: classical scores (computed from reports up to 2022, no labels) and
+  a drug-level-only control (`models/drug_control.py`).
+- Evaluation over time belongs to Task B (dated FDA label changes); report-sparse
+  drugs belong to Task C. Task A has no ≥ 2024 filter on its eval set.
+
+**Why.** Measured on the old time split (309,522 test pairs):
+- 94.5% of test (ingredients, PT) labels were already present among train-period
+  labeled pairs; a label lookup scored `auc_strat` 0.999.
+- The drug's mean train label alone (leaving out the pair) scored 0.747, above every
+  classical method, with no pair-level signal.
+- Requiring eval pairs to appear in ≥ 2024 data kept 199K of 587K eligible pairs and
+  986 of 1,236 drug sets, raised the positive rate 31.2% → 33.9% and the median count
+  6 → 10. Within each train-volume band, survival did not depend on the label. It added
+  no temporal information (SIDER labels are static and mostly pre-2015) and only cut power.
+
+**Removed from the Task A leaderboard** (checked against code and data):
+- `ROR_all`: `clean_faers.compute_ror` over all of `master.parquet`, 2023–2026Q1 included
+  (reproduced exactly).
+- Within-split `PRR`: `baseline.load_split` computes it on the eval split itself.
+- `ror_train`: built in the notebook; missing exactly where a pair is absent from
+  train, but only 2.8% of values match ROR recomputed from `train.parquet`. Replaced
+  by `disproportionality.ror` computed in code from reports up to 2022.
+
+**Open limits.** "Up to 2022" is currently 2012–2022 (legacy rows missing, MVP blocker 2).
+Classical scores still benefit from reporting that follows labeling, equally for all
+methods. Revisit this decision if a drug-level-only model reaches the classical level,
+if gains concentrate on drugs with same-class neighbours in training (consider
+ATC-grouped folds), or if fold-to-fold sd hides method differences.

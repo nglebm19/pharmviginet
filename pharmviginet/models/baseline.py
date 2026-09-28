@@ -7,20 +7,30 @@ Usage:
     python -m pharmviginet.models.baseline --split val
     python -m pharmviginet.models.baseline --labels sider   # independent SIDER labels
     python -m pharmviginet.models.baseline --level row      # old per-report scoring
+    python -m pharmviginet.models.baseline --task a         # Task A: ingredient-disjoint folds
+
+--task timesplit (default) is the legacy time-split reference. It is not Task A:
+ROR_all and within-split PRR use eval-period data (FB-D11).
 """
 from __future__ import annotations
 
 import argparse
+import json
+
 import numpy as np
 import pandas as pd
 
 import pyarrow.parquet as pq
 
-from pharmviginet.config import LABELS_SIDER, LOGS, TRAIN_PARQUET, VAL_PARQUET, TEST_PARQUET
+from pharmviginet.config import (
+    FEATURE_CUTOFF_YEAR, LABELS_SIDER, LOGS, TASK_A_MIN_REPORTS, TASK_A_N_FOLDS, TASK_A_PAIRS,
+    TASK_A_RESULTS, TASK_A_SEED, TEST_PARQUET, TRAIN_PARQUET, VAL_PARQUET,
+)
+from pharmviginet.models import drug_control
 from pharmviginet.models.disproportionality import (
     bcpnn, compute_prr, ebgm, fit_mgps_prior, pair_counts, prr,
 )
-from pharmviginet.utils.metrics import compute_metrics, print_metrics, save_metrics
+from pharmviginet.utils.metrics import compute_metrics, fold_metrics, print_metrics, save_metrics
 
 COLS = ["label", "ror", "ror_lower_ci", "n_reports", "drugname", "pt", "ror_train", "primaryid"]
 PAIR = ["drugname", "pt"]
@@ -110,13 +120,51 @@ def evaluate(split_name: str, path, labels: str = "ror", level: str = "pair",
     return results
 
 
+def evaluate_task_a() -> dict:
+    """Classical scores + drug-level control on ingredient-disjoint folds (built by data.task_a)."""
+    df = pd.read_parquet(TASK_A_PAIRS)
+    print(f"Task A: {len(df):,} pairs, {df['label'].mean():.1%} positive, {df['fold'].nunique()} folds")
+    # log-scale where the statistic is a ratio, as in the time-split evaluation
+    df["s_ror"] = np.log(df["ror"])
+    df["s_prr"] = np.log(df["prr"])
+    df["s_ic"], df["s_ic025"] = df["ic"], df["ic025"]
+    df["s_ebgm"], df["s_eb05"] = np.log(df["ebgm"]), np.log(df["eb05"])
+    print("Fitting drug-level control (out-of-fold) …")
+    df["s_drug_control"] = drug_control.oof_scores(df)
+    cols = ["s_ror", "s_prr", "s_ic", "s_ic025", "s_ebgm", "s_eb05", "s_drug_control"]
+    res = fold_metrics(df, cols, ref="s_ic")
+
+    # rename s_x → x in the output
+    strip = lambda d: {k[2:]: v for k, v in d.items()}
+    res = {"ref": "ic", "folds": {k: strip(v) for k, v in res["folds"].items()},
+           "summary": strip(res["summary"])}
+    prior = json.loads(TASK_A_PAIRS.with_suffix(".prior.json").read_text())
+    res["config"] = {
+        "feature_cutoff_year": FEATURE_CUTOFF_YEAR, "min_reports": TASK_A_MIN_REPORTS,
+        "n_folds": TASK_A_N_FOLDS, "seed": TASK_A_SEED, "n_pairs": int(len(df)),
+        "pos_rate": float(df["label"].mean()), "mgps_prior": prior,
+    }
+    print(f"\n{'method':14s} {'AUC_strat mean ± sd':>22s} {'diff vs IC mean ± sd':>24s}")
+    for m, v in sorted(res["summary"].items(), key=lambda kv: -kv[1]["auc_strat_mean"]):
+        print(f"{m:14s} {v['auc_strat_mean']:>14.4f} ± {v['auc_strat_sd']:.4f} "
+              f"{v['diff_vs_ref_mean']:>+15.4f} ± {v['diff_vs_ref_sd']:.4f}")
+    return res
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--task", choices=["timesplit", "a"], default="timesplit",
+                        help="timesplit = legacy reference; a = Task A ingredient-disjoint folds")
     parser.add_argument("--split", choices=["val", "test", "both"], default="both")
     parser.add_argument("--labels", choices=["ror", "sider"], default="ror")
     parser.add_argument("--level", choices=["pair", "row"], default="pair",
                         help="score each unique (drug, pt) pair once, or every report row")
     args = parser.parse_args()
+
+    if args.task == "a":
+        save_metrics(TASK_A_RESULTS, evaluate_task_a())
+        print(f"\nSaved → {TASK_A_RESULTS}")
+        return
 
     train = train_counts()
     results = {}

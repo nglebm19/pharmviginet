@@ -52,3 +52,38 @@ def save_metrics(path, results: dict) -> None:
     pathlib.Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
         json.dump(results, f, indent=2)
+
+
+def fold_metrics(df: pd.DataFrame, score_cols: list[str], fold_col: str = "fold",
+                 group_col: str = "pt", ref: str = "ic", min_n: int = 20) -> dict:
+    """
+    Score each method within each fold, then summarize across folds.
+
+    Every method is scored on the same rows of each fold. The summary gives
+    auc_strat mean and sample sd over folds, and the per-fold paired difference
+    auc_strat(method) - auc_strat(ref). F1 is left out (no meaningful threshold).
+    """
+    folds: dict = {}
+    for k, d in df.groupby(fold_col, sort=True):
+        y, g = d["label"].values, d[group_col].values
+        folds[int(k)] = {}
+        for col in score_cols:
+            s = d[col].values.astype(float)
+            if not np.isfinite(s).all():
+                raise ValueError(f"non-finite scores in {col!r}, fold {k}")
+            st, n_strata = stratified_auc(y, s, g, min_n=min_n)
+            folds[int(k)][col] = {
+                "auc": float(roc_auc_score(y, s)),
+                "auprc": float(average_precision_score(y, s)),
+                "auc_strat": st, "n_strata": n_strata,
+                "n": int(len(d)), "pos_rate": float(y.mean()),
+            }
+    summary = {}
+    for col in score_cols:
+        st = np.array([folds[k][col]["auc_strat"] for k in folds])
+        diff = st - np.array([folds[k][ref]["auc_strat"] for k in folds])
+        summary[col] = {
+            "auc_strat_mean": float(st.mean()), "auc_strat_sd": float(st.std(ddof=1)),
+            "diff_vs_ref_mean": float(diff.mean()), "diff_vs_ref_sd": float(diff.std(ddof=1)),
+        }
+    return {"ref": ref, "folds": folds, "summary": summary}

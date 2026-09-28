@@ -32,9 +32,9 @@ reproducible classical baselines.
 
 | Task | Question | Labels | Status |
 |---|---|---|---|
-| A — Known ADE ranking | Within one event (MedDRA PT), which drugs are known to cause it? | SIDER 4.1 | Built |
+| A — Known ADE ranking | Within one event (MedDRA PT), which drugs are known to cause it, for ingredients whose labels were held out? | SIDER 4.1, ingredient-disjoint folds | Built |
 | B — Early detection | How early does a method flag a pair before the FDA adds it to the drug label? | FDA SrLC label-change dates | Planned |
-| C — Cold start | Can a method score drugs with few or no training-period reports? | SIDER 4.1, drug-disjoint split | Planned |
+| C — Report-sparse drugs | Can a method score drugs with few or no reports up to the cutoff? | SIDER 4.1 | Planned |
 
 Unit of evaluation: one (drug, PT) pair. Primary metric: `auc_strat`, the ROC AUC
 computed within each PT and averaged weighted by PT size.

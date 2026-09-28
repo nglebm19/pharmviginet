@@ -4,7 +4,7 @@ An open, non-commercial benchmark for adverse drug event signal detection on FDA
 
 > **Status: work in progress.** The data pipeline, independent SIDER labels and
 > classical disproportionality baselines are done. ML baselines, the label-change
-> task, the cold-start split and the public leaderboard are planned.
+> task, the report-sparse drug task and the public leaderboard are planned.
 
 ## Why
 
@@ -21,9 +21,11 @@ An open, non-commercial benchmark for adverse drug event signal detection on FDA
   collected). Primary-suspect drugs only (`role_cod == "PS"`), deduplicated to the
   latest `caseversion` per `caseid`. 52.7M rows in `master.parquet`, currently
   covering 2012 onward only (see Known limitations).
-- **Time split:** train ≤ 2022, val = 2023, test ≥ 2024 (2026Q1 is treated as
-  part of the holdout). No random splits — they leak future reports.
-- **Unit of evaluation:** one (drug, MedDRA PT) pair with ≥ 3 reports.
+- **Task A split:** features from reports up to 2022 only; 5 folds grouped by RxNorm
+  ingredient (label-held-out ingredients). Evaluation over time is Task B.
+- **Time split** (legacy reference and Task B): train ≤ 2022, val = 2023,
+  test ≥ 2024 (2026Q1 is treated as part of the holdout). No random splits.
+- **Unit of evaluation:** one (drug, MedDRA PT) pair with ≥ 3 reports up to 2022.
 
 ## Labels (task A)
 
@@ -45,26 +47,29 @@ labels derived from ROR) and is kept only for comparison.
 ## Metric
 
 Primary metric: **`auc_strat`** — ROC AUC computed within each PT, then a
-weighted mean across PTs (`pharmviginet/utils/metrics.py`).
+weighted mean across PTs (`pharmviginet/utils/metrics.py`). For Task A it is
+computed per fold and reported as mean ± sd over the 5 folds.
 
 Pooled AUC is misleading here: SIDER positives are dominated by common,
 non-specific events (nausea, headache) that have low disproportionality for
 every drug, which pushes pooled AUC below chance. Comparing drugs within the
 same event is the meaningful question and matches published ROR-vs-SIDER results.
 
-## Baselines
+## Baselines (task A)
 
-SIDER labels, test split, one score per unique (drug, PT) pair.
-`_train` methods use train-period counts only; unseen pairs get neutral scores.
+SIDER labels; pairs with ≥ 3 reports up to 2022; all scores computed from reports up
+to 2022 only; 5 ingredient-disjoint folds, so a learned model never trains on the
+SIDER labels of the ingredients it is scored on. 560,334 pairs.
 
-| Model | AUC pooled | **AUC_strat** |
-|---|---|---|
-| IC (BCPNN) | 0.52 | **0.615** |
-| EBGM (MGPS) | 0.53 | **0.615** |
-| PRR_train | 0.52 | 0.612 |
+| Method | AUC_strat, mean ± sd over folds |
+|---|---|
+| EB05 | 0.609 ± 0.014 |
+| IC (BCPNN) | 0.606 ± 0.020 |
+| ROR | 0.602 ± 0.020 |
+| Drug-level-only control | 0.543 ± 0.035 |
 
-All classical methods land at 0.60–0.62 — the bar for learned models.
-Full leaderboard: [MVP.md](MVP.md).
+All classical methods land at about 0.60–0.61. Full table, paired differences and
+fold checks: [MVP.md](MVP.md). Design: FB-D11 in [DECISIONS.md](DECISIONS.md).
 
 ## Known limitations
 
@@ -108,10 +113,16 @@ python -m pharmviginet.labels.sider
 # 8. Build labels → data/processed/labels_sider.parquet
 python -m pharmviginet.labels.build_labels
 
-# 9. Score baselines → data/logs/baseline_results_sider.json
+# 9. Task A pairs + ingredient-disjoint folds → data/processed/task_a_*.parquet
+python -m pharmviginet.data.task_a
+
+# 10. Score Task A baselines → data/logs/task_a_results.json
+python -m pharmviginet.models.baseline --task a
+
+# (legacy time-split reference → data/logs/baseline_results_sider.json)
 python -m pharmviginet.models.baseline --labels sider
 
-# 10. Tests
+# 11. Tests
 pytest tests/
 ```
 

@@ -29,3 +29,12 @@ RXNORM_MAP     = EXTERNAL / "rxnorm_map.parquet"
 SIDER_DIR      = EXTERNAL / "sider"
 SIDER_PAIRS    = EXTERNAL / "sider_pairs.parquet"
 LABELS_SIDER   = PROCESSED / "labels_sider.parquet"
+
+# Task A — ingredient-disjoint folds, features from reports up to the cutoff year
+FEATURE_CUTOFF_YEAR = 2022
+TASK_A_MIN_REPORTS  = 3
+TASK_A_N_FOLDS      = 5
+TASK_A_SEED         = 0
+TASK_A_PAIRS        = PROCESSED / "task_a_pairs.parquet"
+TASK_A_FOLDS        = PROCESSED / "task_a_folds.parquet"
+TASK_A_RESULTS      = LOGS / "task_a_results.json"

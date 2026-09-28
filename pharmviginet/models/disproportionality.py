@@ -42,6 +42,14 @@ def prr(c: pd.DataFrame) -> pd.Series:
     return (c["a"] / c["n_drug"]) / denom.replace(0, np.nan)
 
 
+def ror(c: pd.DataFrame) -> pd.Series:
+    """ROR = a·d / ((b + 0.5)(c + 0.5)), same formula as clean_faers.compute_ror."""
+    b = c["n_drug"] - c["a"]
+    cc = c["n_reac"] - c["a"]
+    d = c["N"] - c["n_drug"] - c["n_reac"] + c["a"]
+    return c["a"] * d / ((b + 0.5) * (cc + 0.5))
+
+
 def compute_prr(df: pd.DataFrame) -> pd.DataFrame:
     c = pair_counts(df)
     c["prr"] = prr(c)

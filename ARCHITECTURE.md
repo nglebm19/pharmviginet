@@ -18,7 +18,10 @@ FDA quarterly zips ─ collect_faers.py ─▶ data/raw/ ─▶ data/extracted/<
 master.parquet ─ labels/drug_norm.py ─▶ data/external/rxnorm_map.parquet
 SIDER download ─ labels/sider.py     ─▶ data/external/sider_pairs.parquet
 both           ─ labels/build_labels.py ─▶ data/processed/labels_sider.parquet
-ml/*.parquet + labels ─ models/baseline.py ─▶ data/logs/baseline_results_sider.json
+ml/*.parquet + labels ─ models/baseline.py ─▶ data/logs/baseline_results_sider.json   (legacy time split)
+
+master.parquet (year ≤ 2022) + labels ─ data/task_a.py ─▶ data/processed/task_a_pairs.parquet, task_a_folds.parquet
+task_a_pairs ─ models/baseline.py --task a ─▶ data/logs/task_a_results.json
 ```
 
 ## Stages
@@ -32,7 +35,9 @@ ml/*.parquet + labels ─ models/baseline.py ─▶ data/logs/baseline_results_s
 | 7 Drug normalization | `python -m pharmviginet.labels.drug_norm` | `rxnorm_map.parquet` | Done |
 | 8 SIDER pairs | `python -m pharmviginet.labels.sider` | `sider_pairs.parquet` | Done |
 | 9 Labels | `python -m pharmviginet.labels.build_labels` | `labels_sider.parquet` | Done |
-| 10 Baselines | `python -m pharmviginet.models.baseline --labels sider` | `baseline_results_sider.json` | Done |
+| 10 Baselines, legacy time split | `python -m pharmviginet.models.baseline --labels sider` | `baseline_results_sider.json` | Done; not Task A |
+| 11 Task A pairs + folds | `python -m pharmviginet.data.task_a` | `task_a_pairs.parquet`, `task_a_folds.parquet` | Done |
+| 12 Task A scoring | `python -m pharmviginet.models.baseline --task a` | `task_a_results.json` | Done |
 | — Text / mol models | `python -m pharmviginet.train.train` | `model_checkpoints/*.pt` | Paused, still on ROR labels (text: 1 epoch on 10K rows, AUC 0.64) |
 
 `scripts/run_pipeline.sh` runs only the text/mol training step.
@@ -46,17 +51,19 @@ pharmviginet/
 ├── data/faers.py             # PyTorch dataset: text_input, smiles, label
 ├── data/smiles.py            # PyTorch dataset: smiles, label
 ├── data/clean.py             # empty
+├── data/task_a.py            # Task A: counts up to 2022, eligibility, ingredient-disjoint folds, fold quality, scores
 ├── labels/drug_norm.py       # RxNav client (≤ 15 req/s, retries), resumable cache
 ├── labels/sider.py           # SIDER download, PT rows, drug → ingredient (RxNav, PubChem fallback)
 ├── labels/build_labels.py    # SIDER labels for FAERS pairs with ≥ 3 reports
 ├── models/disproportionality.py  # pair counts, PRR, BCPNN, MGPS
-├── models/baseline.py        # scores and evaluates all classical methods
+├── models/baseline.py        # classical methods: legacy time split, or --task a
+├── models/drug_control.py    # Task A drug-level-only control (out-of-fold, sklearn)
 ├── models/text.py, mol.py    # PubMedBERT / ChemBERTa fine-tuning
 ├── models/fusion.py          # empty
 ├── train/train.py, evaluate.py   # runs text then mol; evaluates on 100K-row samples
-├── utils/metrics.py          # AUC, AUPRC, F1, stratified_auc
+├── utils/metrics.py          # AUC, AUPRC, F1, stratified_auc, fold_metrics
 └── utils/logging.py          # empty
-tests/                        # disproportionality, labels, metrics
+tests/                        # disproportionality, labels, metrics, task_a
 ```
 
 ## Labels (task A)
@@ -70,25 +77,46 @@ For each FAERS (drugname, PT) pair with ≥ 3 reports:
   every ingredient and the PT are in SIDER but the pair is not listed, and drops the rest.
   PTs are matched lowercase.
 
+## Task A folds
+
+`data/task_a.py`, all counts from reports with `year <= FEATURE_CUTOFF_YEAR` (2022):
+
+1. Pair counts and scores up to the cutoff; MGPS prior fitted on all 4.3M pairs.
+2. Eligible = ≥ 3 distinct reports up to the cutoff, inner-joined with `labels_sider`
+   (`drugname, pt, ingredients, label` only).
+3. Ingredients are shuffled (seed 0) and each goes to the fold with the fewest pairs
+   so far. A pair takes its ingredients' fold; pairs whose ingredients span folds are dropped.
+4. Fold quality is checked before scoring; the run stops if the largest/smallest fold
+   ratio > 1.5, a fold's positive rate is > 5 pp from the overall rate, a fold has
+   < 500 usable PT strata, or one ingredient holds > 10% of a fold's pairs.
+5. Drug-level features for the control: `log_n_drug`, `n_pt`, `first_year`, `n_ingredients`.
+
 ## Scoring
 
 Per pair, from distinct reports: `a` (drug and event), `n_drug`, `n_reac`, `N`,
 `E = n_drug · n_reac / N`.
 
-- **ROR:** `a·d / ((b+0.5)(c+0.5))`, computed in `clean_faers.compute_ror` over all of
-  `master.parquet` (`ror`), and in the notebook over train only (`ror_train`).
+- **ROR:** `a·d / ((b+0.5)(c+0.5))`. Task A uses `disproportionality.ror` on counts up
+  to 2022. Legacy columns: `ror` (`clean_faers.compute_ror`, all of `master.parquet`,
+  eval years included) and `ror_train` (notebook; cannot be reproduced from `train.parquet`).
 - **PRR:** `(a / n_drug) / ((n_reac − a) / (N − n_drug))`.
 - **BCPNN:** `IC = log2((a+0.5)/(E+0.5))`; IC025 by Norén's closed-form approximation.
 - **MGPS:** a two-gamma mixture prior fitted by maximum marginal likelihood on a
   zero-truncated negative binomial, with pairs grouped on (a, E rounded to 3 significant
   digits). EBGM is `exp(E[log λ | a])`; EB05 comes from bisection on the mixture CDF.
   **Known issue:** on 4.3M train pairs the fit is near-degenerate (p ≈ 0.99, α ≈ 3e-5).
-- `_train` variants use train-period counts; unseen pairs get IC 0, EBGM 1, PRR 1.
+- Legacy `_train` variants use train-period counts; unseen pairs get IC 0, EBGM 1, PRR 1.
+  Task A pairs all have ≥ 3 reports up to the cutoff, so no neutral fill is needed;
+  PRR is undefined when `n_reac == a` (8 pairs) and is set to the largest finite PRR.
 
 ## Metric
 
 `utils/metrics.stratified_auc`: ROC AUC within each PT, skipping PTs with < 20 pairs
 or one class, averaged weighted by PT size. Reported as `auc_strat` with `n_strata`.
+
+`utils/metrics.fold_metrics`: Task A scores every method on the same rows of each fold,
+then reports `auc_strat` mean and sample sd over folds, plus the per-fold paired
+difference from a reference method (IC).
 
 ## Known data gaps
 
@@ -105,4 +133,4 @@ or one class, averaged weighted by PT size. Reported as `auc_strat` with `n_stra
 - LightGBM on per-pair features (time trends, demographics, outcomes, reporter type,
   indications, classical scores).
 - Task B: SrLC label-change scraper and a lead-time metric.
-- Task C: drug-disjoint cold-start split.
+- Task C: report-sparse drugs (few or no reports up to the cutoff).

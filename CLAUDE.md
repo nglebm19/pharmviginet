@@ -88,6 +88,10 @@ pd.read_csv(path, sep="$", encoding="latin1", low_memory=False)
 - Benchmark label = SIDER 4.1 (`FB-D2`). Rules: `ARCHITECTURE.md`.
 - The `label` column in `master.parquet` / `ml/*.parquet` is the **old circular ROR
   rule**, kept only for comparison. Don't train or score against it.
+- The `ror_train` column in `ml/{val,test}.parquet` was built in the notebook and cannot
+  be reproduced from `train.parquet`. Don't use it; Task A computes ROR in code.
+- Task A eligibility comes from reports up to 2022 only; never use `labels_sider.n_reports`
+  (all years) for Task A.
 
 ---
 
@@ -124,6 +128,7 @@ df = df.sort_values("caseversion").groupby("caseid").last()
 - Commit anything under `data/` (raw, extracted, processed, external, logs)
 - Commit or redistribute SIDER files or labels derived from them
 - Report pooled AUC as the headline metric — use `auc_strat` (`FB-D7`)
+- Evaluate supervised models for Task A without ingredient-disjoint folds (`FB-D11`)
 
 ---
 
@@ -149,8 +154,10 @@ df = df.sort_values("caseversion").groupby("caseid").last()
 
 ## Useful commands
 ```bash
-.venv/bin/python -m pytest -q tests                                  # 12 tests
-.venv/bin/python -m pharmviginet.models.baseline --labels sider      # leaderboard → data/logs/baseline_results_sider.json
+.venv/bin/python -m pytest -q tests                                  # 19 tests
+.venv/bin/python -m pharmviginet.data.task_a                         # Task A pairs + folds, ~50 s; stops on bad fold quality
+.venv/bin/python -m pharmviginet.models.baseline --task a            # Task A leaderboard → data/logs/task_a_results.json, ~50 s
+.venv/bin/python -m pharmviginet.models.baseline --labels sider      # legacy time-split reference → data/logs/baseline_results_sider.json
 .venv/bin/python -m pharmviginet.labels.build_labels                 # rebuild labels_sider.parquet
 .venv/bin/python -m pharmviginet.labels.drug_norm                    # RxNav mapping; resumable, ~2.5 h cold
 ```
