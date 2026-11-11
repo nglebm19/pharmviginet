@@ -1,0 +1,857 @@
+{
+  "schema_version": 1,
+  "audited_at_utc": "2026-10-28T22:22:09.948195+00:00",
+  "audit_checkout_commit": "60b1a28f6efb632c3c079eec54266d26a27f2ce7",
+  "original_artifact_producer_commit": null,
+  "provenance_limit": "Original runs lack source hashes, commit IDs and dependency versions. This is a retrospective verification against local artifacts, not a raw-data rebuild. mtimes are filesystem evidence, not authenticated run dates. MGPS prior was reused, not refitted; all-years label completeness was not rebuilt.",
+  "environment": {
+    "numpy": "2.4.6",
+    "pandas": "3.0.6",
+    "pyarrow": "25.0.1",
+    "scipy": "1.17.1",
+    "scikit-learn": "1.9.1"
+  },
+  "verification": {
+    "stored_labels_reapplied": true,
+    "fold_quality": true,
+    "all_metrics_replayed": true,
+    "split_metadata_checked": true,
+    "counts_reconstructed": true,
+    "eligible_pairs": 746362,
+    "combination_pairs_dropped": 31328,
+    "scores_recomputed_with_stored_prior": true
+  },
+  "config": {
+    "feature_cutoff_year": 2022,
+    "min_reports": 3,
+    "n_folds": 5,
+    "seed": 0,
+    "n_pairs": 715034,
+    "pos_rate": 0.2888394118321646,
+    "mgps_prior": {
+      "a1": 0.0002437553,
+      "b1": 0.0076449336,
+      "a2": 0.2761445385,
+      "b2": 0.4313084679,
+      "p": 0.947192855
+    }
+  },
+  "metric": {
+    "name": "auc_strat",
+    "min_pt_pairs": 20,
+    "both_classes_required": true,
+    "within_fold_weight": "PT pair count",
+    "fold_weight": "equal",
+    "sd_ddof": 1
+  },
+  "coverage": {
+    "master_rows": 62732870,
+    "rows_by_year": {
+      "2004": 721314,
+      "2005": 894525,
+      "2006": 922967,
+      "2007": 873029,
+      "2008": 1004167,
+      "2009": 1080710,
+      "2010": 1464041,
+      "2011": 1745586,
+      "2012": 1971355,
+      "2013": 2333632,
+      "2014": 2451979,
+      "2015": 3410995,
+      "2016": 3146247,
+      "2017": 3332648,
+      "2018": 3923476,
+      "2019": 4080097,
+      "2020": 4320597,
+      "2021": 4446449,
+      "2022": 4465197,
+      "2023": 4237245,
+      "2024": 4330160,
+      "2025": 5571598,
+      "2026": 2004856
+    },
+    "rows_by_era": {
+      "aers": 10004383,
+      "faers": 52728487
+    },
+    "quarters": [
+      "2004Q1",
+      "2004Q2",
+      "2004Q3",
+      "2004Q4",
+      "2005Q1",
+      "2005Q2",
+      "2005Q3",
+      "2005Q4",
+      "2006Q1",
+      "2006Q2",
+      "2006Q3",
+      "2006Q4",
+      "2007Q1",
+      "2007Q2",
+      "2007Q3",
+      "2007Q4",
+      "2008Q1",
+      "2008Q2",
+      "2008Q3",
+      "2008Q4",
+      "2009Q1",
+      "2009Q2",
+      "2009Q3",
+      "2009Q4",
+      "2010Q1",
+      "2010Q2",
+      "2010Q3",
+      "2010Q4",
+      "2011Q1",
+      "2011Q2",
+      "2011Q3",
+      "2011Q4",
+      "2012Q1",
+      "2012Q2",
+      "2012Q3",
+      "2012Q4",
+      "2013Q1",
+      "2013Q2",
+      "2013Q3",
+      "2013Q4",
+      "2014Q1",
+      "2014Q2",
+      "2014Q3",
+      "2014Q4",
+      "2015Q1",
+      "2015Q2",
+      "2015Q3",
+      "2015Q4",
+      "2016Q1",
+      "2016Q2",
+      "2016Q3",
+      "2016Q4",
+      "2017Q1",
+      "2017Q2",
+      "2017Q3",
+      "2017Q4",
+      "2018Q1",
+      "2018Q2",
+      "2018Q3",
+      "2018Q4",
+      "2019Q1",
+      "2019Q2",
+      "2019Q3",
+      "2019Q4",
+      "2020Q1",
+      "2020Q2",
+      "2020Q3",
+      "2020Q4",
+      "2021Q1",
+      "2021Q2",
+      "2021Q3",
+      "2021Q4",
+      "2022Q1",
+      "2022Q2",
+      "2022Q3",
+      "2022Q4",
+      "2023Q1",
+      "2023Q2",
+      "2023Q3",
+      "2023Q4",
+      "2024Q1",
+      "2024Q2",
+      "2024Q3",
+      "2024Q4",
+      "2025Q1",
+      "2025Q2",
+      "2025Q3",
+      "2025Q4",
+      "2026Q1"
+    ],
+    "role_counts": {
+      "PS": 62732870
+    }
+  },
+  "mapping": {
+    "names": 43099,
+    "mapped": 32090,
+    "mapped_fraction": 0.7445648390913943,
+    "min_master_rows": 10,
+    "modern_only_names_ge10": 33802,
+    "cache_matches_mapping": true,
+    "cache_clean_names": 40590
+  },
+  "labels": {
+    "all_years_pairs": 860422,
+    "positive_pairs": 242296,
+    "positive_fraction": 0.28160135375432055,
+    "drug_names": 11732,
+    "sider_pairs": 134844,
+    "sider_ingredients": 1264
+  },
+  "fold_quality": [
+    {
+      "fold": 0,
+      "pairs": 145321,
+      "pos_rate": 0.2832832144012221,
+      "ingredients": 205,
+      "strata": 1137,
+      "top1_share": 0.03457862249778078,
+      "top10_share": 0.28969660269334785
+    },
+    {
+      "fold": 1,
+      "pairs": 141939,
+      "pos_rate": 0.2877926433186087,
+      "ingredients": 177,
+      "strata": 1029,
+      "top1_share": 0.043885049211280905,
+      "top10_share": 0.29495064781349734
+    },
+    {
+      "fold": 2,
+      "pairs": 143510,
+      "pos_rate": 0.28186885931293987,
+      "ingredients": 215,
+      "strata": 1085,
+      "top1_share": 0.055773116855968224,
+      "top10_share": 0.3043690335168281
+    },
+    {
+      "fold": 3,
+      "pairs": 140261,
+      "pos_rate": 0.2706454395733668,
+      "ingredients": 185,
+      "strata": 1096,
+      "top1_share": 0.04315526054997469,
+      "top10_share": 0.30314199955796695
+    },
+    {
+      "fold": 4,
+      "pairs": 144003,
+      "pos_rate": 0.32014610806719307,
+      "ingredients": 250,
+      "strata": 1140,
+      "top1_share": 0.03449928126497365,
+      "top10_share": 0.2725776546321952
+    }
+  ],
+  "results": {
+    "ref": "ic",
+    "folds": {
+      "0": {
+        "ror": {
+          "auc": 0.5060321012300867,
+          "auprc": 0.28172148830749066,
+          "auc_strat": 0.6047681277418903,
+          "n_strata": 1137,
+          "n": 145321,
+          "pos_rate": 0.2832832144012221
+        },
+        "prr": {
+          "auc": 0.5047870444652356,
+          "auprc": 0.2797399331468974,
+          "auc_strat": 0.6047443600379261,
+          "n_strata": 1137,
+          "n": 145321,
+          "pos_rate": 0.2832832144012221
+        },
+        "ic": {
+          "auc": 0.5104665389880942,
+          "auprc": 0.28842468573879887,
+          "auc_strat": 0.608712020722765,
+          "n_strata": 1137,
+          "n": 145321,
+          "pos_rate": 0.2832832144012221
+        },
+        "ic025": {
+          "auc": 0.5435972343019675,
+          "auprc": 0.30790932859631204,
+          "auc_strat": 0.6199704648361027,
+          "n_strata": 1137,
+          "n": 145321,
+          "pos_rate": 0.2832832144012221
+        },
+        "ebgm": {
+          "auc": 0.5133125156270272,
+          "auprc": 0.2852863932792413,
+          "auc_strat": 0.6103763678658736,
+          "n_strata": 1137,
+          "n": 145321,
+          "pos_rate": 0.2832832144012221
+        },
+        "eb05": {
+          "auc": 0.5370046886204289,
+          "auprc": 0.29878581481347155,
+          "auc_strat": 0.6196403837198159,
+          "n_strata": 1137,
+          "n": 145321,
+          "pos_rate": 0.2832832144012221
+        },
+        "drug_control": {
+          "auc": 0.660507865452409,
+          "auprc": 0.44559658370529265,
+          "auc_strat": 0.5471931973931762,
+          "n_strata": 1137,
+          "n": 145321,
+          "pos_rate": 0.2832832144012221
+        }
+      },
+      "1": {
+        "ror": {
+          "auc": 0.5180330698841706,
+          "auprc": 0.2954288212104422,
+          "auc_strat": 0.6281944070373839,
+          "n_strata": 1029,
+          "n": 141939,
+          "pos_rate": 0.2877926433186087
+        },
+        "prr": {
+          "auc": 0.516638126416721,
+          "auprc": 0.2930849831567446,
+          "auc_strat": 0.6281753412090859,
+          "n_strata": 1029,
+          "n": 141939,
+          "pos_rate": 0.2877926433186087
+        },
+        "ic": {
+          "auc": 0.5219171675267045,
+          "auprc": 0.30411855636624563,
+          "auc_strat": 0.6307403075235991,
+          "n_strata": 1029,
+          "n": 141939,
+          "pos_rate": 0.2877926433186087
+        },
+        "ic025": {
+          "auc": 0.5490765600243642,
+          "auprc": 0.32270367681431833,
+          "auc_strat": 0.6243952379939248,
+          "n_strata": 1029,
+          "n": 141939,
+          "pos_rate": 0.2877926433186087
+        },
+        "ebgm": {
+          "auc": 0.5240292847425473,
+          "auprc": 0.29882667879030217,
+          "auc_strat": 0.6303041475967733,
+          "n_strata": 1029,
+          "n": 141939,
+          "pos_rate": 0.2877926433186087
+        },
+        "eb05": {
+          "auc": 0.5434573053591008,
+          "auprc": 0.3119315004427954,
+          "auc_strat": 0.6266250003294956,
+          "n_strata": 1029,
+          "n": 141939,
+          "pos_rate": 0.2877926433186087
+        },
+        "drug_control": {
+          "auc": 0.6824175857919178,
+          "auprc": 0.46410333707967383,
+          "auc_strat": 0.5908783366164573,
+          "n_strata": 1029,
+          "n": 141939,
+          "pos_rate": 0.2877926433186087
+        }
+      },
+      "2": {
+        "ror": {
+          "auc": 0.5117709444599551,
+          "auprc": 0.2860801723112171,
+          "auc_strat": 0.6065151595785052,
+          "n_strata": 1085,
+          "n": 143510,
+          "pos_rate": 0.28186885931293987
+        },
+        "prr": {
+          "auc": 0.5102635512547972,
+          "auprc": 0.2837186024529519,
+          "auc_strat": 0.6064858075154397,
+          "n_strata": 1085,
+          "n": 143510,
+          "pos_rate": 0.28186885931293987
+        },
+        "ic": {
+          "auc": 0.5162358283954791,
+          "auprc": 0.29557685651147253,
+          "auc_strat": 0.610575500945694,
+          "n_strata": 1085,
+          "n": 143510,
+          "pos_rate": 0.28186885931293987
+        },
+        "ic025": {
+          "auc": 0.5489252366676983,
+          "auprc": 0.3162199939565981,
+          "auc_strat": 0.6168087811343888,
+          "n_strata": 1085,
+          "n": 143510,
+          "pos_rate": 0.28186885931293987
+        },
+        "ebgm": {
+          "auc": 0.5188878721383305,
+          "auprc": 0.2896987795798772,
+          "auc_strat": 0.6114273846904343,
+          "n_strata": 1085,
+          "n": 143510,
+          "pos_rate": 0.28186885931293987
+        },
+        "eb05": {
+          "auc": 0.5422817769528633,
+          "auprc": 0.3039456359745466,
+          "auc_strat": 0.6171300886111728,
+          "n_strata": 1085,
+          "n": 143510,
+          "pos_rate": 0.28186885931293987
+        },
+        "drug_control": {
+          "auc": 0.648686002014044,
+          "auprc": 0.4114306155767118,
+          "auc_strat": 0.5463826743945778,
+          "n_strata": 1085,
+          "n": 143510,
+          "pos_rate": 0.28186885931293987
+        }
+      },
+      "3": {
+        "ror": {
+          "auc": 0.5105045660511329,
+          "auprc": 0.2687147584463926,
+          "auc_strat": 0.6158608903898392,
+          "n_strata": 1096,
+          "n": 140261,
+          "pos_rate": 0.2706454395733668
+        },
+        "prr": {
+          "auc": 0.5094187431083448,
+          "auprc": 0.2671420518792777,
+          "auc_strat": 0.6158888386940403,
+          "n_strata": 1096,
+          "n": 140261,
+          "pos_rate": 0.2706454395733668
+        },
+        "ic": {
+          "auc": 0.5144144637511004,
+          "auprc": 0.2756213195689232,
+          "auc_strat": 0.6183107437020305,
+          "n_strata": 1096,
+          "n": 140261,
+          "pos_rate": 0.2706454395733668
+        },
+        "ic025": {
+          "auc": 0.5471446003271918,
+          "auprc": 0.29604991077716236,
+          "auc_strat": 0.6212540057540201,
+          "n_strata": 1096,
+          "n": 140261,
+          "pos_rate": 0.2706454395733668
+        },
+        "ebgm": {
+          "auc": 0.5176166331175462,
+          "auprc": 0.2726494875993348,
+          "auc_strat": 0.6197508175064917,
+          "n_strata": 1096,
+          "n": 140261,
+          "pos_rate": 0.2706454395733668
+        },
+        "eb05": {
+          "auc": 0.5409132585088936,
+          "auprc": 0.2865926990243664,
+          "auc_strat": 0.6219935712857995,
+          "n_strata": 1096,
+          "n": 140261,
+          "pos_rate": 0.2706454395733668
+        },
+        "drug_control": {
+          "auc": 0.6484217467312173,
+          "auprc": 0.4064775084863287,
+          "auc_strat": 0.5502336008448035,
+          "n_strata": 1096,
+          "n": 140261,
+          "pos_rate": 0.2706454395733668
+        }
+      },
+      "4": {
+        "ror": {
+          "auc": 0.4883296386998418,
+          "auprc": 0.3076672868267168,
+          "auc_strat": 0.5957172201496188,
+          "n_strata": 1140,
+          "n": 144003,
+          "pos_rate": 0.32014610806719307
+        },
+        "prr": {
+          "auc": 0.48726359170844535,
+          "auprc": 0.3057374329393431,
+          "auc_strat": 0.5956855665760221,
+          "n_strata": 1140,
+          "n": 144003,
+          "pos_rate": 0.32014610806719307
+        },
+        "ic": {
+          "auc": 0.49481984031050974,
+          "auprc": 0.3207536249966054,
+          "auc_strat": 0.6000014976571031,
+          "n_strata": 1140,
+          "n": 144003,
+          "pos_rate": 0.32014610806719307
+        },
+        "ic025": {
+          "auc": 0.5309433786822203,
+          "auprc": 0.34563699940329096,
+          "auc_strat": 0.6127929717605086,
+          "n_strata": 1140,
+          "n": 144003,
+          "pos_rate": 0.32014610806719307
+        },
+        "ebgm": {
+          "auc": 0.4970223052453623,
+          "auprc": 0.31304568010939315,
+          "auc_strat": 0.6020079460437315,
+          "n_strata": 1140,
+          "n": 144003,
+          "pos_rate": 0.32014610806719307
+        },
+        "eb05": {
+          "auc": 0.5229404685277558,
+          "auprc": 0.33021046826748013,
+          "auc_strat": 0.6125954933706066,
+          "n_strata": 1140,
+          "n": 144003,
+          "pos_rate": 0.32014610806719307
+        },
+        "drug_control": {
+          "auc": 0.6352524296931334,
+          "auprc": 0.44941332559809066,
+          "auc_strat": 0.5372408131473719,
+          "n_strata": 1140,
+          "n": 144003,
+          "pos_rate": 0.32014610806719307
+        }
+      }
+    },
+    "summary": {
+      "ror": {
+        "auc_strat_mean": 0.6102111609794475,
+        "auc_strat_sd": 0.012335699606735185,
+        "diff_vs_ref_mean": -0.0034568531307908714,
+        "diff_vs_ref_sd": 0.0008845790413391163
+      },
+      "prr": {
+        "auc_strat_mean": 0.6101959828065028,
+        "auc_strat_sd": 0.012346089536852177,
+        "diff_vs_ref_mean": -0.0034720313037355233,
+        "diff_vs_ref_sd": 0.0009034453430951147
+      },
+      "ic": {
+        "auc_strat_mean": 0.6136680141102383,
+        "auc_strat_sd": 0.011553325501211336,
+        "diff_vs_ref_mean": 0.0,
+        "diff_vs_ref_sd": 0.0
+      },
+      "ic025": {
+        "auc_strat_mean": 0.6190442922957891,
+        "auc_strat_sd": 0.0044285936705087455,
+        "diff_vs_ref_mean": 0.005376278185550665,
+        "diff_vs_ref_sd": 0.007642463913931187
+      },
+      "ebgm": {
+        "auc_strat_mean": 0.6147733327406609,
+        "auc_strat_sd": 0.010717571211286522,
+        "diff_vs_ref_mean": 0.0011053186304225582,
+        "diff_vs_ref_sd": 0.0009587744945760778
+      },
+      "eb05": {
+        "auc_strat_mean": 0.6195969074633781,
+        "auc_strat_sd": 0.005249880273525398,
+        "diff_vs_ref_mean": 0.00592889335313973,
+        "diff_vs_ref_sd": 0.006628358689007963
+      },
+      "drug_control": {
+        "auc_strat_mean": 0.5543857244792774,
+        "auc_strat_sd": 0.02096831009161215,
+        "diff_vs_ref_mean": -0.05928228963096101,
+        "diff_vs_ref_sd": 0.01113230557171607
+      }
+    },
+    "config": {
+      "feature_cutoff_year": 2022,
+      "min_reports": 3,
+      "n_folds": 5,
+      "seed": 0,
+      "n_pairs": 715034,
+      "pos_rate": 0.2888394118321646,
+      "mgps_prior": {
+        "a1": 0.0002437553,
+        "b1": 0.0076449336,
+        "a2": 0.2761445385,
+        "b2": 0.4313084679,
+        "p": 0.947192855
+      }
+    }
+  },
+  "artifacts": {
+    "data/processed/master.parquet": {
+      "bytes": 2953558689,
+      "sha256": "feff1a64124e70cbfd6ef4867630bc313806b30b2563716950e4697c9c9f53fd",
+      "mtime_utc": "2026-09-28T04:18:50.881999+00:00",
+      "rows": 62732870
+    },
+    "data/external/rxnorm_map.parquet": {
+      "bytes": 2346865,
+      "sha256": "520872671cf60758a585d2fad34870c1f2409680632d0236acd0bd77a53e8d5f",
+      "mtime_utc": "2026-09-28T04:55:14.025530+00:00",
+      "rows": 43099
+    },
+    "data/external/sider_pairs.parquet": {
+      "bytes": 272100,
+      "sha256": "860dfcef364b38cba19b46bc7151525bc92c16aafcbaf10b217e2d688af7ce69",
+      "mtime_utc": "2026-09-25T06:06:03.583993+00:00",
+      "rows": 134844
+    },
+    "data/processed/labels_sider.parquet": {
+      "bytes": 2762050,
+      "sha256": "748b10a60ea2b563e8d19b697e5b070b5fa85e484b6beda91a18799b92caa5a7",
+      "mtime_utc": "2026-09-28T04:55:41.631211+00:00",
+      "rows": 860422
+    },
+    "data/processed/task_a_pairs.parquet": {
+      "bytes": 45515552,
+      "sha256": "00148d001c42843b651ef3f51ba6a5aedf90dc248376ef4861a5f0a88fd43f72",
+      "mtime_utc": "2026-09-28T04:56:49.807503+00:00",
+      "rows": 715034
+    },
+    "data/processed/task_a_folds.parquet": {
+      "bytes": 14520,
+      "sha256": "457c221872e72c758091d45ecd5439dc131070a627a576e7e1600fcdb7f042f8",
+      "mtime_utc": "2026-09-28T04:56:49.575612+00:00",
+      "rows": 1138
+    },
+    "data/processed/task_a_pairs.prior.json": {
+      "bytes": 89,
+      "sha256": "0f6b668fce6f226fc8b5ccffdff3be2fc65b60baeb0ca1bde7b2404ea51625c2",
+      "mtime_utc": "2026-09-28T04:56:49.810286+00:00"
+    },
+    "data/logs/task_a_results.json": {
+      "bytes": 9739,
+      "sha256": "62e49c7a810ac24210777ccc756b3f98c3ca0458fdbc0139ac819d3592d605ce",
+      "mtime_utc": "2026-09-28T04:57:55.483025+00:00"
+    },
+    "data/processed/ml/split_manifest.json": {
+      "bytes": 3326,
+      "sha256": "92d9a295bc699647245194c2561155026418b614af023a1c9f08844f07e99f50",
+      "mtime_utc": "2026-09-28T05:56:15.010578+00:00"
+    },
+    "data/processed/cases_deduped.parquet": {
+      "bytes": 642886569,
+      "sha256": "47e2d4ee0845dd006459e690f9452297a4d2a53199089dd96b78895397df510e",
+      "mtime_utc": "2026-09-28T04:09:40.504814+00:00",
+      "rows": 20328567
+    },
+    "data/external/rxnav_cache_faers.parquet": {
+      "bytes": 1542675,
+      "sha256": "384d69a2020b6c72b0800a403bc10949aaf3467050c39623e7baa53d95a0ccce",
+      "mtime_utc": "2026-09-28T04:55:13.981193+00:00",
+      "rows": 40590
+    },
+    "data/external/rxnav_cache_sider.parquet": {
+      "bytes": 62311,
+      "sha256": "737394af6ac94ff784d9c8013ab6a56e70832425d9c135ab50aa4fa5e8fea455",
+      "mtime_utc": "2026-09-25T06:04:40.105015+00:00",
+      "rows": 1344
+    },
+    "data/external/sider/meddra_all_se.tsv.gz": {
+      "bytes": 2381171,
+      "sha256": "119b2f5319a9398da83e5fe3419889010dbacf8d3eef590251b00c025e2b3f99",
+      "mtime_utc": "2026-09-25T06:00:13.869830+00:00"
+    },
+    "data/external/sider/drug_names.tsv": {
+      "bytes": 34759,
+      "sha256": "6427a3e3202c71a81dff97092957aacf0700b9c01f34b07e452a1ec47c92b007",
+      "mtime_utc": "2026-09-25T06:00:14.569473+00:00"
+    },
+    "data/logs/audit_report.json": {
+      "bytes": 50101,
+      "sha256": "107138a883a85e67f1a85bb31692f636d64ce0e271f35dd4c2dc4ad4bf783269",
+      "mtime_utc": "2026-05-29T07:12:35.546970+00:00"
+    },
+    "data/logs/baseline_results.json": {
+      "bytes": 1489,
+      "sha256": "6bde868b88093327857ed6c5aefce68241ec63ac5d1276766dd3070983216b78",
+      "mtime_utc": "2026-09-25T18:09:46.831945+00:00"
+    },
+    "data/logs/baseline_results_sider.json": {
+      "bytes": 3912,
+      "sha256": "e132c01736e0e45284028506429700de1ff5f7ff3e00ade2f7e7ff07df7ec617",
+      "mtime_utc": "2026-09-28T06:02:40.067063+00:00"
+    },
+    "data/logs/baseline_results_sider_notebook_2012.json": {
+      "bytes": 3909,
+      "sha256": "63120a0064d628589451dd37465135652e14e340d85435e1cf910f57a59d0df3",
+      "mtime_utc": "2026-09-25T19:25:06.199555+00:00"
+    },
+    "data/logs/download_log.json": {
+      "bytes": 19512,
+      "sha256": "75d3f9d08f6d90e62e6684c95943864d21e0e83f47c5990f5f12e95fa8be60cd",
+      "mtime_utc": "2026-05-27T10:33:22.477542+00:00"
+    },
+    "data/logs/schema_map.json": {
+      "bytes": 104566,
+      "sha256": "047ac079ea3019f142d7cc5d29ae708e8d07f77aa8bfd8871da99c7888ce32e8",
+      "mtime_utc": "2026-05-29T07:12:35.552063+00:00"
+    },
+    "data/logs/text_results.json": {
+      "bytes": 191,
+      "sha256": "0e8c71b9fe58ea1ee45e1cdfdbee6add3e078f692dc7eb235f30f06217ee618d",
+      "mtime_utc": "2026-05-31T17:34:29.255849+00:00"
+    },
+    "data/logs/validation_report.json": {
+      "bytes": 125314,
+      "sha256": "779ae0007ea16cb87bb8ef2ab43cfc035d3ed426cf19fcf3c97a6bddb9d1ceb3",
+      "mtime_utc": "2026-05-27T18:40:28.653901+00:00"
+    },
+    "data/logs/drug_norm.log": {
+      "bytes": 2042895,
+      "sha256": "bbe869ce2628e07f5fc95060ade90cd9d832efd59c0fa458f454978a20ab1f99",
+      "mtime_utc": "2026-09-25T07:37:12.740898+00:00"
+    },
+    "data/processed/ml/train.parquet": {
+      "bytes": 2190276298,
+      "sha256": "ba0981d6c07c3d56d8de2934486e5a608a11fc76a8b5dd040261cfc3ecfc8903",
+      "mtime_utc": "2026-09-28T05:56:14.985341+00:00",
+      "rows": 46589011
+    },
+    "data/processed/ml/val.parquet": {
+      "bytes": 209510262,
+      "sha256": "0aac194fb8b42f47df85a10b04c20c7bce847a853f383991bbca2ef2b493ab5c",
+      "mtime_utc": "2026-09-28T05:56:14.988461+00:00",
+      "rows": 4237245
+    },
+    "data/processed/ml/test.parquet": {
+      "bytes": 531740206,
+      "sha256": "89f0980c06e21473b98d70740b29f4c09f13576284914b1be1d289df67b8d009",
+      "mtime_utc": "2026-09-28T05:56:14.989147+00:00",
+      "rows": 11906614
+    }
+  },
+  "source_fingerprints": {
+    "clean_faers.py": {
+      "bytes": 28799,
+      "sha256": "e6c64c2ee8a59a592ba33e04ac5be1cd5fab45fd18ed6475f9112b4e57258d3d",
+      "mtime_utc": "2026-09-28T05:53:55.054235+00:00"
+    },
+    "scripts/audit_results.py": {
+      "bytes": 9820,
+      "sha256": "2e42f2d8d7887ab0117e7b1e92f3d3370a4d7549983fcfe5275b3157bccd9aef",
+      "mtime_utc": "2026-11-11T01:42:35.960313+00:00"
+    },
+    "scripts/leakage_check.py": {
+      "bytes": 4133,
+      "sha256": "5d633edf2acf0deca4ee4ad8b8cbb7a46956e180d65b73e647715c95688eabf9",
+      "mtime_utc": "2026-11-11T01:42:06.453375+00:00"
+    },
+    "pharmviginet/__init__.py": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mtime_utc": "2026-05-26T20:36:36.286024+00:00"
+    },
+    "pharmviginet/config.py": {
+      "bytes": 1484,
+      "sha256": "c52593ffa07b23ae35aa265b2b8029198f4852e11f45cea7c5549906e3e15d91",
+      "mtime_utc": "2026-09-28T05:53:12.506638+00:00"
+    },
+    "pharmviginet/data/clean.py": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mtime_utc": "2026-05-26T20:36:36.289384+00:00"
+    },
+    "pharmviginet/data/faers.py": {
+      "bytes": 3249,
+      "sha256": "bf480e44f534ee14f27698cd3b95eef9e4b949218754c9616e5e87c911446d61",
+      "mtime_utc": "2026-05-31T17:24:11.855334+00:00"
+    },
+    "pharmviginet/data/smiles.py": {
+      "bytes": 1962,
+      "sha256": "78969c0dd7054a28d709d6d43c4b07dc4de284f0c0a716cda2ee0f43cd6d8a7d",
+      "mtime_utc": "2026-06-15T20:13:04.999279+00:00"
+    },
+    "pharmviginet/data/task_a.py": {
+      "bytes": 8194,
+      "sha256": "cdfd09242cf496002b93c203bf932da507713268a4db6d92753587a2b4fa119e",
+      "mtime_utc": "2026-09-28T03:18:44.803271+00:00"
+    },
+    "pharmviginet/labels/__init__.py": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mtime_utc": "2026-09-25T05:59:45.685841+00:00"
+    },
+    "pharmviginet/labels/build_labels.py": {
+      "bytes": 3307,
+      "sha256": "5ff14f0f16f2bf5622b1ccb1c446da7193bbe8225d7b876ecbbafe6891f83ac2",
+      "mtime_utc": "2026-09-25T06:06:35.656173+00:00"
+    },
+    "pharmviginet/labels/drug_norm.py": {
+      "bytes": 6325,
+      "sha256": "cdc8fa886b60d67651fac85797ae9e0b43b4b751478dd347834e7227ec80e01d",
+      "mtime_utc": "2026-09-25T05:59:45.673432+00:00"
+    },
+    "pharmviginet/labels/sider.py": {
+      "bytes": 4073,
+      "sha256": "3f33293ecd355735d67da545a71ae50f601199d5e27b5d6efbfcf53d84a662ce",
+      "mtime_utc": "2026-09-25T06:00:03.664572+00:00"
+    },
+    "pharmviginet/models/baseline.py": {
+      "bytes": 8466,
+      "sha256": "7bc1fce508021ed31b540d82b4995af66282dc4dd8a1b0e8e98c517eb3685251",
+      "mtime_utc": "2026-09-28T05:54:18.121286+00:00"
+    },
+    "pharmviginet/models/disproportionality.py": {
+      "bytes": 5125,
+      "sha256": "e99da31a3b64c029be9aca354484d7b1025545f4fa4cbdb37bf0ceb29692464e",
+      "mtime_utc": "2026-09-28T03:17:49.561639+00:00"
+    },
+    "pharmviginet/models/drug_control.py": {
+      "bytes": 1160,
+      "sha256": "4410aa98c720ea516b45d7e6325a9b01b3a9bd32ff16f994185ec6d448474091",
+      "mtime_utc": "2026-09-28T03:18:45.066704+00:00"
+    },
+    "pharmviginet/models/fusion.py": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mtime_utc": "2026-05-26T20:36:36.292256+00:00"
+    },
+    "pharmviginet/models/mol.py": {
+      "bytes": 5971,
+      "sha256": "93aa34fe95a548b6466ac59d98daacc557d97be666d2b0c2f2e91f8ea13fcc96",
+      "mtime_utc": "2026-06-15T20:14:45.984385+00:00"
+    },
+    "pharmviginet/models/text.py": {
+      "bytes": 5558,
+      "sha256": "50030f9f55a4955a0ed9bddb33aeb247bd3d1bc6a03f25c6752c790ff499bcf9",
+      "mtime_utc": "2026-05-31T17:24:37.374151+00:00"
+    },
+    "pharmviginet/train/evaluate.py": {
+      "bytes": 3257,
+      "sha256": "23bbe517ba8fb0c14f90315d52bb2992aeaba583a754a8c510f00fee82d8ff2f",
+      "mtime_utc": "2026-06-15T20:14:48.105702+00:00"
+    },
+    "pharmviginet/train/train.py": {
+      "bytes": 1798,
+      "sha256": "7ada8a5bc0019b9d1d0af8932c185c7001ee6dd501fe983bc1e2e1f3eee3c049",
+      "mtime_utc": "2026-06-15T20:14:47.196458+00:00"
+    },
+    "pharmviginet/utils/logging.py": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mtime_utc": "2026-05-26T20:36:36.297911+00:00"
+    },
+    "pharmviginet/utils/metrics.py": {
+      "bytes": 3797,
+      "sha256": "97d98c7f570ff1ce8fa395a6a40ab022d4386283bbaf834b87bdc268417d877b",
+      "mtime_utc": "2026-09-28T03:17:58.839312+00:00"
+    }
+  },
+  "reproduce_verification": "python -m scripts.audit_results --counts --output /tmp/results_manifest.json",
+  "reproduce_task_a": [
+    "python -m pharmviginet.data.task_a",
+    "python -m pharmviginet.models.baseline --task a"
+  ]
+}

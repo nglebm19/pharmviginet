@@ -163,7 +163,8 @@ df = df.sort_values("caseversion").groupby("caseid").last()
 
 ## Useful commands
 ```bash
-.venv/bin/python -m pytest -q tests                                  # 35 tests
+.venv/bin/python -m pytest -q tests                                  # 41 tests
+.venv/bin/python -m scripts.leakage_check                            # time-split label overlap, read-only, ~20 s, ~2.2 GB
 .venv/bin/python clean_faers.py --stage split                        # ml/ split from master.parquet, ~90 s
 .venv/bin/python -m pharmviginet.data.task_a                         # Task A pairs + folds, ~50 s; stops on bad fold quality
 .venv/bin/python -m pharmviginet.models.baseline --task a            # Task A leaderboard → data/logs/task_a_results.json, ~50 s

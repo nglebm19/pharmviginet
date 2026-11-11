@@ -22,6 +22,9 @@ An open, non-commercial benchmark for adverse drug event signal detection on FDA
   latest version per `caseid`. 62.7M rows in `master.parquet`, 2004–2026.
 - **Task A split:** features from reports up to 2022 only; 5 folds grouped by RxNorm
   ingredient (label-held-out ingredients). Evaluation over time is Task B.
+  A plain time split leaks labels: SIDER labels are static per (ingredients, PT),
+  and 95.96% of time-split test pairs share that key with a train-period labeled
+  pair, so copying the label scores `auc_strat` 0.9995 (`scripts/leakage_check.py`).
 - **Time split** (legacy reference and Task B): train ≤ 2022, val = 2023,
   test ≥ 2024 (2026Q1 is treated as part of the holdout). No random splits.
 - **Unit of evaluation:** one (drug, MedDRA PT) pair with ≥ 3 reports up to 2022.
@@ -29,7 +32,9 @@ An open, non-commercial benchmark for adverse drug event signal detection on FDA
 ## Labels (task A)
 
 FAERS drug names are free text, so both FAERS and SIDER drugs are mapped to
-RxNorm ingredients via the NLM RxNav API (76.4% of 33.8K FAERS drug names mapped).
+RxNorm ingredients via the NLM RxNav API: 32,090 of 43,099 candidate FAERS drug
+names mapped (74.5%). Candidates have ≥ 10 rows in the all-years master table;
+this is name coverage, not report coverage or mapping accuracy.
 
 | Label | Rule |
 |---|---|
@@ -37,8 +42,10 @@ RxNorm ingredients via the NLM RxNav API (76.4% of 33.8K FAERS drug names mapped
 | negative | every ingredient and the PT are known to SIDER, but the pair is not listed |
 | dropped | anything else (drug unmapped / not in SIDER, or PT unknown to SIDER) |
 
-Result: 713K labeled pairs, 29% positive. Negatives rely on a closed-world
-assumption and are therefore somewhat noisy.
+The all-years SIDER label pool contains 860,422 pairs (28.2% positive).
+Task A separately requires ≥ 3 distinct reports through 2022 and drops combination
+pairs spanning ingredient folds: 715,034 evaluation pairs (28.9% positive).
+Negatives rely on a closed-world assumption and are therefore somewhat noisy.
 
 The older rule `ROR ≥ 2.0 AND lower_CI > 1.0` is circular (ROR is scored against
 labels derived from ROR) and is kept only for comparison.
@@ -46,13 +53,16 @@ labels derived from ROR) and is kept only for comparison.
 ## Metric
 
 Primary metric: **`auc_strat`** — ROC AUC computed within each PT, then a
-weighted mean across PTs (`pharmviginet/utils/metrics.py`). For Task A it is
-computed per fold and reported as mean ± sd over the 5 folds.
+weighted mean across PTs with ≥ 20 pairs and both classes
+(`pharmviginet/utils/metrics.py`). For Task A it is computed per fold and reported
+as the equally weighted mean ± sample sd over the 5 folds (seed 0).
 
 Pooled AUC is misleading here: SIDER positives are dominated by common,
 non-specific events (nausea, headache) that have low disproportionality for
-every drug, which pushes pooled AUC below chance. Comparing drugs within the
-same event is the meaningful question and matches published ROR-vs-SIDER results.
+every drug, which leaves pooled AUC near chance: 0.49–0.55 for the classical
+scores across Task A folds, while the drug-level-only control reaches 0.64–0.68
+pooled without any pair-level signal. Comparing drugs within the same event is the
+meaningful question and matches published ROR-vs-SIDER results.
 
 ## Baselines (task A)
 
@@ -64,11 +74,17 @@ SIDER labels of the ingredients it is scored on. 715,034 pairs.
 |---|---|
 | EB05 | 0.620 ± 0.005 |
 | IC (BCPNN) | 0.614 ± 0.012 |
-| ROR | 0.602 ± 0.020 |
+| ROR | 0.610 ± 0.012 |
 | Drug-level-only control | 0.554 ± 0.021 |
 
 All classical methods land at about 0.61–0.62. Full table, paired differences and
 fold checks: [MVP.md](MVP.md). Design: FB-D11 in [DECISIONS.md](DECISIONS.md).
+
+These are post-FB-D12 results, retrospectively checked against local artifacts;
+the original runs did not record their producing commit. See the
+[results audit](RESULTS_AUDIT.md) and [results manifest](results_manifest.json)
+for verification scope, fingerprints and reproduction commands. Historical
+2012–2022 Task A ROR was 0.602 ± 0.020 on 560,334 pairs; it is not the current result.
 
 ## Known limitations
 

@@ -39,7 +39,9 @@ same score thousands of times. (`3192265`)
 AUC within each PT (≥ 20 pairs, both classes), weighted mean by PT size.
 **Why:** SIDER positives are dominated by common, non-specific events (nausea,
 headache) with low disproportionality for every drug, which pushes pooled AUC
-below chance. Comparing drugs within one event matches published ROR-vs-SIDER work. (`3192265`)
+to or below chance (legacy time split 0.45–0.57 across methods; Task A classical
+scores 0.49–0.55 per fold). Comparing drugs within one event matches published
+ROR-vs-SIDER work. (`3192265`)
 
 ## FB-D8 — Classical `_train` baselines use train-period counts only (2026-09-25)
 Pairs unseen in train get neutral scores (IC 0, EBGM 1, PRR 1).
@@ -54,6 +56,8 @@ knowledge rather than learn from reports.
 ## FB-D10 — Repo stays private until v0; SIDER never redistributed (2026-09-25)
 Nothing under `data/` is committed. Users rebuild labels locally with the scripts.
 **Why:** v0 criteria in `MVP.md` are not met; SIDER's CC BY-NC-SA / MedDRA terms.
+**Status (2026-11-10):** the "private until v0" part is superseded by FB-D14 — the
+repo is public. The data and SIDER rules above still hold.
 
 ## FB-D11 — Task A uses ingredient-disjoint folds (resolved 2026-09-27)
 **Decision.** Task A = SIDER labels + features from reports up to 2022 only +
@@ -74,9 +78,14 @@ Nothing under `data/` is committed. Users rebuild labels locally with the script
 
 **Why.** Measured on the old time split (309,522 test pairs):
 - 94.5% of test (ingredients, PT) labels were already present among train-period
-  labeled pairs; a label lookup scored `auc_strat` 0.999.
+  labeled pairs; a label lookup scored `auc_strat` 0.999. *Historical and unverified:*
+  no script or log was saved, and the 2012+ split and labels it used were overwritten
+  by FB-D12/FB-D13. Reproduced on the current script-built split (2026-11-10,
+  `python -m scripts.leakage_check`): 327,514 test pairs, 95.96% share a key with a
+  train-period labeled pair, label lookup `auc_strat` 0.9995 (1.000 on shared keys).
 - The drug's mean train label alone (leaving out the pair) scored 0.747, above every
-  classical method, with no pair-level signal.
+  classical method, with no pair-level signal. *Historical and unverified:* no script
+  or log was saved and its inputs were overwritten; it has not been re-measured.
 - Requiring eval pairs to appear in ≥ 2024 data kept 199K of 587K eligible pairs and
   986 of 1,236 drug sets, raised the positive rate 31.2% → 33.9% and the median count
   6 → 10. Within each train-volume band, survival did not depend on the label. It added
@@ -151,3 +160,22 @@ carried a `ror_train` column that could not be reproduced.
 group (~440–540 MB in Arrow), not by dataset size. Operational limit 3 GB on the current
 16 GB machine. Smaller batches (`iter_batches`) are the fallback if a lower-memory machine
 must be supported.
+
+## FB-D14 — Source repo is public before v0; data stays local (2026-11-10)
+**Decision.** `nglebm19/pharmviginet` is public on GitHub, though the v0 criteria in
+`MVP.md` are not met. Supersedes only the "private until v0" part of FB-D10.
+- **Public:** code (MIT), tests, docs, and aggregate results (`results_manifest.json`:
+  metrics, counts, hashes; no label rows).
+- **Never committed:** anything under `data/` — raw FAERS/AERS files, processed parquet,
+  RxNav caches, SIDER files, `labels_sider.parquet`, Task A pairs and folds. FAERS is
+  U.S. public domain, but these files are large and rebuilt locally by the scripts.
+- **Restricted:** SIDER 4.1 is CC BY-NC-SA and contains MedDRA terms (MedDRA® is an
+  ICH trademark under its own licence). SIDER files and labels derived from them are
+  never redistributed; users download SIDER and accept its terms themselves.
+- "Public release" in `MVP.md` still means the v0 milestone (dataset card,
+  leaderboard, write-up), not repo visibility.
+
+**Why:** the repo was found public during the 2026-11-10 audit (`gh repo view`) and
+is kept public so reviewers can read the code and audit. No restricted file has ever
+been committed: a 2026-11-10 scan of all git history found no `data/`, parquet,
+SIDER/MedDRA, archive or checkpoint paths.
