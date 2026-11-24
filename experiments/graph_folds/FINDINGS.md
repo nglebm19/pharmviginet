@@ -62,8 +62,19 @@ Subsets, F on all pairs (same fitted scores, metric restricted to the subset):
 | Drug-level control | 0.5492 ± 0.0097 | 0.5918 ± 0.0830 | 0.6118 ± 0.0610 |
 
 Single-ingredient pairs under production greedy: EB05 0.6191, IC 0.6128, ROR 0.6093,
-control 0.5499. Combination pairs kept by production (9,589) have 0–1 usable strata
-per fold, so production cannot score combinations at all.
+control 0.5499 — directly comparable with the F single-ingredient column (same 705,445
+pairs, different folds).
+
+**The combination columns have no production counterpart.** Of the 40,917 combination
+pairs, production keeps only the 9,589 whose ingredients fall in one fold and drops
+the other 31,328 (the "recovered" subset, so recovered ⊂ combination). Those 9,589
+pairs have 0–1 usable PT strata per fold (≥ 20 pairs and both classes per PT), so
+`auc_strat` is undefined for them under either partition. The combination and
+recovered figures are therefore F-only estimates, not a production-vs-F comparison.
+They are also weak: 23–85 strata per fold against > 1,000 for single-ingredient
+pairs, fold sd 0.02–0.08, so the ROR/IC vs EB05 ordering on combinations is within
+noise. Scores come from the all-pairs fit (the drug-level control is trained on all
+training-fold pairs, not on combinations alone); only the metric is restricted.
 
 ## Reading
 - Changing only the partition (same pairs) lowers every classical mean by ≤ 0.001 and
